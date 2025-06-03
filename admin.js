@@ -3,72 +3,95 @@ document.addEventListener('DOMContentLoaded', () => {
   updateAuthLink();
   const user = getCurrentUser();
   if (!user || !user.isAdmin) {
-    alert('Access denied. Admins only.');
-    window.location.href = 'index.html';
-    return;
+    window.location.href = 'login.html';
+  } else {
+    displayKPIs();
+    displayProducts();
+    displayOrders();
+    document.getElementById('productForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      addProduct();
+    });
   }
-  displayKPIs();
-  displayProductsAdmin();
-  displayOrdersAdmin();
-  document.getElementById('productForm').addEventListener('submit', addProduct);
 });
 
 function displayKPIs() {
   const orders = getOrders();
-  const users = getUsers();
-  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
-  document.getElementById('totalOrders').textContent = orders.length;
-  document.getElementById('totalRevenue').textContent = totalRevenue.toFixed(2);
-  document.getElementById('totalCustomers').textContent = users.length;
+  const products = getProducts();
+  const revenue = orders.reduce((sum, order) => {
+    return sum + order.items.reduce((s, item) => {
+      const product = products.find(p => p.id === item.id);
+      return s + (product ? product.price * item.quantity : 0);
+    }, 0);
+  }, 0);
+  document.getElementById('kpis').innerHTML = `
+    <p><i class="fas fa-shopping-cart"></i> Total Orders: ${orders.length}</p>
+    <p><i class="fas fa-dollar-sign"></i> Revenue: $${revenue.toFixed(2)}</p>
+    <p><i class="fas fa-box"></i> Products: ${products.length}</p>
+  `;
 }
 
-function displayProductsAdmin() {
+function displayProducts() {
   const products = getProducts();
-  document.getElementById('productList').innerHTML = products.map(p => `
+  const productList = document.getElementById('productList');
+  productList.innerHTML = products.map(p => `
     <div class="product-list-item">
       <h3>${p.name}</h3>
-      <p>Price: $${p.price}</p>
-      <button onclick="deleteProduct(${p.id})">Delete</button>
+      <p>$${p.price.toFixed(2)}</p>
+      <button onclick="deleteProduct(${p.id})"><i class="fas fa-trash"></i> Delete</button>
     </div>
   `).join('');
 }
 
-function addProduct(e) {
-  e.preventDefault();
-  const products = getProducts();
-  const newProduct = {
-    id: products.length + 1,
-    name: document.getElementById('productName').value,
-    price: parseFloat(document.getElementById('productPrice').value),
-    image: document.getElementById('productImage').value,
-    category: document.getElementById('productCategory').value,
-    description: document.getElementById('productDescription').value,
-    rating: 0
-  };
-  products.push(newProduct);
-  localStorage.setItem('products', JSON.stringify(products));
-  document.getElementById('productForm').reset();
-  displayProductsAdmin();
+function addProduct() {
+  const name = document.getElementById('productName').value;
+  const price = parseFloat(document.getElementById('productPrice').value);
+  const image = document.getElementById('productImage').value;
+  const category = document.getElementById('productCategory').value;
+  const description = document.getElementById('productDescription').value;
+
+  if (name && price && image && category && description) {
+    const products = getProducts();
+    const newProduct = {
+      id: products.length + 1,
+      name,
+      price,
+      image,
+      category,
+      description,
+      rating: 0
+    };
+    products.push(newProduct);
+    localStorage.setItem('products', JSON.stringify(products));
+    displayProducts();
+    document.getElementById('productForm').reset();
+  } else {
+    alert('Please fill all fields.');
+  }
 }
 
 function deleteProduct(id) {
   let products = getProducts();
   products = products.filter(p => p.id !== id);
   localStorage.setItem('products', JSON.stringify(products));
-  displayProductsAdmin();
+  displayProducts();
 }
 
-function displayOrdersAdmin() {
+function displayOrders() {
   const orders = getOrders();
-  document.getElementById('orderList').innerHTML = orders.map(o => `
+  const orderList = document.getElementById('orderList');
+  orderList.innerHTML = orders.map(o => `
     <div class="order-list-item">
-      <h3>Order ID: ${o.id}</h3>
-      <p>User: ${o.userEmail}</p>
-      <p>Total: $${o.total}</p>
+      <h3>Order #${o.id}</h3>
+      <p>User: ${o.userId}</p>
+      <p>Total: $${o.items.reduce((sum, item) => {
+        const product = getProducts().find(p => p.id === item.id);
+        return sum + (product ? product.price * item.quantity : 0);
+      }, 0).toFixed(2)}</p>
       <select onchange="updateOrderStatus(${o.id}, this.value)">
-        <option value="pending" ${o.status === 'pending' ? 'selected' : ''}>Pending</option>
-        <option value="shipped" ${o.status === 'shipped' ? 'selected' : ''}>Shipped</option>
-        <option value="delivered" ${o.status === 'delivered' ? 'selected' : ''}>Delivered</option>
+        <option value="Pending" ${o.status === 'Pending' ? 'selected' : ''}>Pending</option>
+        <option value="Shipped" ${o.status === 'Shipped' ? 'selected' : ''}>Shipped</option>
+        <option value="Delivered" ${o.status === 'Delivered' ? 'selected' : ''}>Delivered</option>
       </select>
     </div>
   `).join('');
@@ -77,7 +100,9 @@ function displayOrdersAdmin() {
 function updateOrderStatus(id, status) {
   const orders = getOrders();
   const order = orders.find(o => o.id === id);
-  order.status = status;
-  localStorage.setItem('orders', JSON.stringify(orders));
-  displayOrdersAdmin();
+  if (order) {
+    order.status = status;
+    localStorage.setItem('orders', JSON.stringify(orders));
+    displayOrders();
+  }
 }

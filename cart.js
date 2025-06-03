@@ -6,39 +6,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function displayCart() {
   const cart = getCart();
-  const products = getProducts();
   const cartItems = document.getElementById('cartItems');
-  const cartTotal = document.getElementById('cartTotal');
-  if (cart.length === 0) {
-    cartItems.innerHTML = '<p>Your cart is empty.</p>';
-    cartTotal.textContent = '0';
-    return;
-  }
+  const cartSummary = document.getElementById('cartSummary');
+  cartItems.innerHTML = '';
   let total = 0;
-  cartItems.innerHTML = cart.map(item => {
-    const product = products.find(p => p.id === item.id);
-    total += product.price * item.quantity;
-    return `
-      <div class="cart-item">
+
+  cart.forEach(item => {
+    const product = getProducts().find(p => p.id === item.id);
+    if (product) {
+      const itemTotal = product.price * item.quantity;
+      total += itemTotal;
+      const cartItem = document.createElement('div');
+      cartItem.className = 'cart-item';
+      cartItem.innerHTML = `
         <img src="${product.image}" alt="${product.name}">
         <div class="cart-item-details">
           <h3>${product.name}</h3>
-          <p>Price: $${product.price}</p>
+          <p>$${product.price.toFixed(2)}</p>
           <input type="number" value="${item.quantity}" min="1" onchange="updateQuantity(${item.id}, this.value)">
-          <button onclick="removeFromCart(${item.id})">Remove</button>
+          <p>$${itemTotal.toFixed(2)}</p>
+          <button onclick="removeFromCart(${item.id})"><i class="fas fa-trash"></i> Remove</button>
         </div>
-      </div>
-    `;
-  }).join('');
-  cartTotal.textContent = total.toFixed(2);
+      `;
+      cartItems.appendChild(cartItem);
+    }
+  });
+
+  cartSummary.innerHTML = `<p>Total: $${total.toFixed(2)}</p>`;
 }
 
 function updateQuantity(id, quantity) {
   const cart = getCart();
   const item = cart.find(i => i.id === id);
-  item.quantity = parseInt(quantity);
-  localStorage.setItem('cart', JSON.stringify(cart));
-  displayCart();
+  if (item) {
+    item.quantity = parseInt(quantity);
+    if (item.quantity < 1) {
+      removeFromCart(id);
+    } else {
+      localStorage.setItem('cart', JSON.stringify(cart));
+      displayCart();
+      updateCartCount();
+    }
+  }
 }
 
 function removeFromCart(id) {

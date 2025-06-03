@@ -1,3 +1,46 @@
+.navbar {
+  background: linear-gradient(135deg, #031A09, #316C40);
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  animation: slideIn 0.5s ease-out;
+}
+.logo {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 1.8rem;
+  color: #E2F87B;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nav-links {
+  display: flex;
+  list-style: none;
+  gap: 1.5rem;
+}
+.nav-links a {
+  color: #FDFFF6;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 300;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color 0.3s;
+}
+.nav-links a:hover {
+  color: #E2F87B;
+}
+.hamburger {
+  display: none;
+  font-size: 1.5rem;
+  color: #FDFFF6;
+  cursor: pointer;
+}
 .login {
   padding: 2rem;
   max-width: 400px;
@@ -30,7 +73,7 @@
   background: #316C40;
   color: #FDFFF6;
   border: none;
-  padding: 0.5rem;
+  padding: 0.5rem 1rem;
   border-radius: 20px;
   cursor: pointer;
   font-family: 'Poppins', sans-serif;
@@ -45,8 +88,61 @@
 .login a {
   color: #316C40;
   font-family: 'Poppins', sans-serif;
+  transition: color 0.3s;
+}
+.login a:hover {
+  color: #E2F87B;
+}
+@keyframes slideIn {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
 }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 768px) {
+  .navbar {
+    flex-wrap: wrap;
+    padding: 1rem;
+  }
+  .nav-links {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    background: linear-gradient(135deg, #031A09, #316C40);
+    padding: 1rem;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+  }
+  .nav-links.active {
+    display: flex;
+    animation: slideInNav 0.3s ease-out;
+  }
+  .nav-links a {
+    font-size: 1.2rem;
+    padding: 0.5rem 0;
+  }
+  .hamburger {
+    display: block;
+  }
+  .login {
+    padding: 1rem;
+    margin: 1rem;
+    max-width: 100%;
+  }
+  .login input {
+    padding: 0.75rem;
+    font-size: 1rem;
+  }
+  .login button {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+  }
+}
+@keyframes slideInNav {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
 }

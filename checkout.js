@@ -1,54 +1,56 @@
 document.addEventListener('DOMContentLoaded', () => {
   updateCartCount();
   updateAuthLink();
-  displayOrderSummary();
-  document.getElementById('checkoutForm').addEventListener('submit', placeOrder);
+  if (!getCurrentUser()) {
+    window.location.href = 'login.html';
+  }
+  displayCheckout();
+  document.getElementById('checkoutForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitOrder();
+  });
 });
 
-function displayOrderSummary() {
+function displayCheckout() {
   const cart = getCart();
-  const products = getProducts();
-  const orderSummary = document.getElementById('orderSummary');
-  const orderTotal = document.getElementById('orderTotal');
-  const deliveryFee = 5;
+  const checkoutItems = document.getElementById('checkoutItems');
   let total = 0;
-  orderSummary.innerHTML = cart.map(item => {
-    const product = products.find(p => p.id === item.id);
-    total += product.price * item.quantity;
-    return `
-      <div class="cart-item">
-        <h3>${product.name}</h3>
-        <p>Price: $${product.price} x ${item.quantity}</p>
-      </div>
-    `;
-  }).join('');
-  orderTotal.textContent = (total + deliveryFee).toFixed(2);
+
+  cart.forEach(item => {
+    const product = getProducts().find(p => p.id === item.id);
+    if (product) {
+      const itemTotal = product.price * item.quantity;
+      total += itemTotal;
+      checkoutItems.innerHTML += `
+        <div class="cart-item">
+          <h3>${product.name}</h3>
+          <p>$${product.price.toFixed(2)} x ${item.quantity} = $${itemTotal.toFixed(2)}</p>
+        </div>
+      `;
+    }
+  });
+
+  checkoutItems.innerHTML += `<p>Total: $${total.toFixed(2)}</p>`;
 }
 
-function placeOrder(e) {
-  e.preventDefault();
-  const user = getCurrentUser();
-  if (!user) {
-    alert('Please log in to place an order');
-    window.location.href = 'login.html';
+function submitOrder() {
+  const cart = getCart();
+  if (cart.length === 0) {
+    alert('Your cart is empty.');
     return;
   }
-  const address = document.getElementById('address').value;
-  const phone = document.getElementById('phone').value;
-  const cart = getCart();
-  const order = {
-    id: Date.now(),
-    userEmail: user.email,
-    items: cart,
-    address,
-    phone,
-    status: 'pending',
-    total: parseFloat(document.getElementById('orderTotal').textContent)
-  };
+  const user = getCurrentUser();
   const orders = getOrders();
+  const order = {
+    id: orders.length + 1,
+    userId: user.email,
+    items: cart,
+    status: 'Pending',
+    date: new Date().toISOString()
+  };
   orders.push(order);
   localStorage.setItem('orders', JSON.stringify(orders));
   localStorage.setItem('cart', JSON.stringify([]));
-  alert('Order placed successfully! Order ID: ' + order.id);
+  alert('Order placed successfully!');
   window.location.href = 'profile.html';
 }
