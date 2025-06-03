@@ -4,49 +4,58 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Deeken - Home</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
   <link rel="stylesheet" href="global.css">
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
-  <header>
-    <nav class="navbar">
-      <a href="index.html" class="logo"><i class="fas fa-store"></i> Deeken</a>
-      <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search products...">
-        <button onclick="searchProducts()"><i class="fas fa-search"></i></button>
+  <nav class="navbar">
+    <a href="index.html" class="logo"><i class="fas fa-store"></i> Deeken</a>
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search products...">
+      <button onclick="searchProducts()"><i class="fas fa-search"></i></button>
+    </div>
+    <ul class="nav-links">
+      <li><a href="index.html"><i class="fas fa-home"></i> Home</a></li>
+      <li><a href="cart.html"><i class="fas fa-shopping-cart"></i> Cart (<span id="cartCount">0</span>)</a></li>
+      <li><a href="profile.html"><i class="fas fa-user"></i> Profile</a></li>
+      <li><a href="admin.html"><i class="fas fa-cog"></i> Admin</a></li>
+      <li><a href="login.html" id="authLink"><i class="fas fa-sign-in-alt"></i> Login</a></li>
+    </ul>
+  </nav>
+  <div class="filters">
+    <select id="categoryFilter">
+      <option value="">All Categories</option>
+      <option value="electronics">Electronics</option>
+      <option value="fashion">Fashion</option>
+      <option value="home">Home</option>
+      <option value="sports">Sports</option>
+      <option value="beauty">Beauty</option>
+    </select>
+    <select id="sortFilter">
+      <option value="">Relevance</option>
+      <option value="price-asc">Price: Low to High</option>
+      <option value="price-desc">Price: High to Low</option>
+      <option value="rating-desc">Rating</option>
+    </select>
+  </div>
+  <div class="product-grid" id="productGrid"></div>
+  <div class="modal" id="productModal">
+    <div class="modal-content">
+      <span class="close-modal"><i class="fas fa-times"></i></span>
+      <img id="modalImage" src="" alt="">
+      <div class="modal-info">
+        <h1 id="modalName"></h1>
+        <p id="modalPrice"></p>
+        <p id="modalRating"></p>
+        <p id="modalDescription"></p>
+        <button id="modalAddToCart"><i class="fas fa-cart-plus"></i> Add to Cart</button>
       </div>
-      <ul class="nav-links">
-        <li><a href="index.html"><i class="fas fa-home"></i> Home</a></li>
-        <li><a href="cart.html"><i class="fas fa-shopping-cart"></i> Cart (<span id="cartCount">0</span>)</a></li>
-        <li><a href="profile.html"><i class="fas fa-user"></i> Profile</a></li>
-        <li><a href="admin.html"><i class="fas fa-cog"></i> Admin</a></li>
-        <li><a href="login.html" id="authLink"><i class="fas fa-sign-in-alt"></i> Login</a></li>
-      </ul>
-    </nav>
-  </header>
-  <main>
-    <section class="filters">
-      <select id="categoryFilter">
-        <option value="">All Categories</option>
-        <option value="electronics">Electronics</option>
-        <option value="fashion">Fashion</option>
-        <option value="home">Home</option>
-        <option value="sports">Sports</option>
-        <option value="beauty">Beauty</option>
-      </select>
-      <select id="sortFilter">
-        <option value="relevance">Relevance</option>
-        <option value="price-low">Price: Low to High</option>
-        <option value="price-high">Price: High to Low</option>
-        <option value="rating">Rating</option>
-      </select>
-    </section>
-    <section class="product-grid" id="productGrid"></section>
-  </main>
+    </div>
+  </div>
   <footer>
-    <p><i class="fas fa-copyright"></i> 2025 Deeken. All rights reserved.</p>
+    <p>© 2025 Deeken. All rights reserved.</p>
   </footer>
   <script src="utils.js"></script>
   <script src="index.js"></script>

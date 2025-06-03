@@ -35,12 +35,6 @@
 .nav-links a:hover {
   color: #E2F87B;
 }
-.hamburger {
-  display: none;
-  font-size: 1.5rem;
-  color: #FDFFF6;
-  cursor: pointer;
-}
 .product-details {
   padding: 2rem;
   display: flex;
@@ -204,65 +198,4 @@
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
-}
-@media (max-width: 768px) {
-  .navbar {
-    flex-wrap: wrap;
-    padding: 1rem;
-  }
-  .nav-links {
-    display: none;
-    flex-direction: column;
-    width: 100%;
-    background: linear-gradient(135deg, #031A09, #316C40);
-    padding: 1rem;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    z-index: 1000;
-  }
-  .nav-links.active {
-    display: flex;
-    animation: slideInNav 0.3s ease-out;
-  }
-  .nav-links a {
-    font-size: 1.2rem;
-    padding: 0.5rem 0;
-  }
-  .hamburger {
-    display: block;
-  }
-  .product-details {
-    flex-direction: column;
-    padding: 1rem;
-    margin: 1rem;
-  }
-  .product-details img {
-    max-width: 100%;
-    height: 200px;
-  }
-  .reviews form {
-    max-width: 100%;
-  }
-  .reviews textarea, .reviews input {
-    font-size: 1rem;
-    padding: 0.75rem;
-  }
-  .reviews button, .product-info button {
-    padding: 0.75rem 1.5rem;
-    font-size: 1rem;
-  }
-  .related-products {
-    padding: 1rem;
-  }
-  .product-card {
-    padding: 1rem;
-  }
-  .product-card img {
-    height: 120px;
-  }
-}
-@keyframes slideInNav {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
 }

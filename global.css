@@ -20,9 +20,3 @@ button:hover {
   gap: 1.5rem;
   padding: 2rem;
 }
-@media (max-width: 768px) {
-  .product-grid {
-    grid-template-columns: 1fr;
-    padding: 1rem;
-  }
-}
