@@ -1,0 +1,22 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: 'Poppins', sans-serif;
+  background: linear-gradient(135deg, #FDFFF6, #E2F87B);
+  color: #031A09;
+}
+a {
+  text-decoration: none;
+}
+button:hover {
+  opacity: 0.9;
+}
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+  padding: 2rem;
+}

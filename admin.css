@@ -1,0 +1,80 @@
+.admin-panel {
+  padding: 2rem;
+  background: linear-gradient(135deg, #FDFFF6, #E2F87B);
+  border-radius: 15px;
+  margin: 2rem;
+  animation: fadeIn 0.5s ease-out;
+}
+.admin-panel h2, .admin-panel h3 {
+  font-family: 'Poppins', sans-serif;
+  color: #031A09;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.kpis {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+.kpis p {
+  color: #031A09;
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+#productForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 500px;
+  margin-bottom: 2rem;
+}
+#productForm input, #productForm textarea {
+  padding: 0.5rem;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: #031A09;
+  font-family: 'Poppins', sans-serif;
+  border-radius: 10px;
+}
+#productForm button {
+  background: #316C40;
+  color: #FDFFF6;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: transform 0.3s;
+}
+#productForm button:hover {
+  transform: scale(1.1);
+}
+.product-list-item, .order-list-item {
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  margin: 1rem 0;
+}
+.product-list-item button, .order-list-item select {
+  background: #316C40;
+  color: #FDFFF6;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  transition: transform 0.3s;
+}
+.product-list-item button:hover, .order-list-item select:hover {
+  transform: scale(1.1);
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}

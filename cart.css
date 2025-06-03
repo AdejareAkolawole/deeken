@@ -1,0 +1,86 @@
+.cart {
+  padding: 2rem;
+  background: linear-gradient(135deg, #FDFFF6, #E2F87B);
+  border-radius: 15px;
+  margin: 2rem;
+  animation: fadeIn 0.5s ease-out;
+}
+.cart h2 {
+  font-family: 'Poppins', sans-serif;
+  color: #031A09;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cart-item {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  margin: 1rem 0;
+  transition: transform 0.3s;
+}
+.cart-item:hover {
+  transform: translateY(-3px);
+}
+.cart-item img {
+  width: 100px;
+  height: auto;
+  border-radius: 10px;
+}
+.cart-item-details {
+  flex: 1;
+}
+.cart-item-details h3 {
+  color: #031A09;
+  font-family: 'Poppins', sans-serif;
+}
+.cart-item-details p {
+  color: #316C40;
+  font-family: 'Poppins', sans-serif;
+}
+.cart-item input {
+  width: 50px;
+  padding: 0.5rem;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: #031A09;
+  font-family: 'Poppins', sans-serif;
+  border-radius: 5px;
+}
+.cart-item button {
+  background: #316C40;
+  color: #FDFFF6;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  transition: transform 0.3s;
+}
+.cart-item button:hover {
+  transform: scale(1.1);
+}
+.cart-summary {
+  padding: 1rem;
+  text-align: right;
+}
+.checkout-btn {
+  background: #E2F87B;
+  color: #031A09;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: transform 0.3s;
+}
+.checkout-btn:hover {
+  transform: scale(1.1);
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
