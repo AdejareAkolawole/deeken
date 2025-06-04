@@ -5,8 +5,8 @@
 }
 body {
   font-family: 'Poppins', sans-serif;
-  background: linear-gradient(135deg, #FDFFF6, #E2F87B);
-  color: #031A09;
+  background: linear-gradient(135deg, #FFFFFF, #F6F6F6);
+  color: #000000;
 }
 a {
   text-decoration: none;
@@ -19,4 +19,14 @@ button:hover {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1.5rem;
   padding: 2rem;
+}
+/* New animations for liveliness */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes glow {
+  0% { box-shadow: 0 0 5px rgba(65, 64, 255, 0.3); }
+  50% { box-shadow: 0 0 15px rgba(65, 64, 255, 0.6); }
+  100% { box-shadow: 0 0 5px rgba(65, 64, 255, 0.3); }
 }

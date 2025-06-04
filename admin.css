@@ -1,5 +1,5 @@
 .navbar {
-  background: linear-gradient(135deg, #031A09, #316C40);
+  background: linear-gradient(135deg, #4140FF, #BDF3FF);
   padding: 1.5rem;
   display: flex;
   justify-content: space-between;
@@ -11,7 +11,7 @@
   font-family: 'Poppins', sans-serif;
   font-weight: 600;
   font-size: 1.8rem;
-  color: #E2F87B;
+  color: #BDF3FF;
   text-decoration: none;
   display: flex;
   align-items: center;
@@ -23,7 +23,7 @@
   gap: 1.5rem;
 }
 .nav-links a {
-  color: #FDFFF6;
+  color: #FFFFFF;
   font-family: 'Poppins', sans-serif;
   font-weight: 300;
   text-decoration: none;
@@ -33,18 +33,18 @@
   transition: color 0.3s;
 }
 .nav-links a:hover {
-  color: #E2F87B;
+  color: #BDF3FF;
 }
 .admin-panel {
   padding: 2rem;
-  background: linear-gradient(135deg, #FDFFF6, #E2F87B);
+  background: linear-gradient(135deg, #FFFFFF, #F6F6F6);
   border-radius: 15px;
   margin: 2rem;
   animation: fadeIn 0.5s ease-out;
 }
 .admin-panel h2, .admin-panel h3 {
   font-family: 'Poppins', sans-serif;
-  color: #031A09;
+  color: #000000;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -55,7 +55,7 @@
   margin-bottom: 2rem;
 }
 .kpis p {
-  color: #031A09;
+  color: #000000;
   font-family: 'Poppins', sans-serif;
   display: flex;
   align-items: center;
@@ -72,13 +72,13 @@
   padding: 0.5rem;
   border: none;
   background: rgba(255, 255, 255, 0.2);
-  color: #031A09;
+  color: #000000;
   font-family: 'Poppins', sans-serif;
   border-radius: 10px;
 }
 #productForm button {
-  background: #316C40;
-  color: #FDFFF6;
+  background: #4140FF;
+  color: #FFFFFF;
   border: none;
   padding: 0.5rem 1rem;
   border-radius: 20px;
@@ -103,16 +103,16 @@
   transform: translateY(-3px);
 }
 .product-list-item h3, .order-list-item h3 {
-  color: #031A09;
+  color: #000000;
   font-family: 'Poppins', sans-serif;
 }
 .product-list-item p, .order-list-item p {
-  color: #316C40;
+  color: #4140FF;
   font-family: 'Poppins', sans-serif;
 }
 .product-list-item button, .order-list-item select {
-  background: #316C40;
-  color: #FDFFF6;
+  background: #4140FF;
+  color: #FFFFFF;
   border: none;
   padding: 0.5rem 1rem;
   border-radius: 20px;

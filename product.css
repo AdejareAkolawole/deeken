@@ -1,5 +1,5 @@
 .navbar {
-  background: linear-gradient(135deg, #031A09, #316C40);
+  background: linear-gradient(135deg, #4140FF, #BDF3FF);
   padding: 1.5rem;
   display: flex;
   justify-content: space-between;
@@ -11,7 +11,7 @@
   font-family: 'Poppins', sans-serif;
   font-weight: 600;
   font-size: 1.8rem;
-  color: #E2F87B;
+  color: #BDF3FF;
   text-decoration: none;
   display: flex;
   align-items: center;
@@ -23,7 +23,7 @@
   gap: 1.5rem;
 }
 .nav-links a {
-  color: #FDFFF6;
+  color: #FFFFFF;
   font-family: 'Poppins', sans-serif;
   font-weight: 300;
   text-decoration: none;
@@ -33,13 +33,13 @@
   transition: color 0.3s;
 }
 .nav-links a:hover {
-  color: #E2F87B;
+  color: #BDF3FF;
 }
 .product-details {
   padding: 2rem;
   display: flex;
   gap: 2rem;
-  background: linear-gradient(135deg, #FDFFF6, #E2F87B);
+  background: linear-gradient(135deg, #FFFFFF, #F6F6F6);
   border-radius: 15px;
   margin: 2rem;
   animation: fadeIn 0.5s ease-out;
@@ -57,17 +57,17 @@
   flex: 1;
 }
 .product-info h1 {
-  color: #031A09;
+  color: #000000;
   font-family: 'Poppins', sans-serif;
   font-weight: 400;
 }
 .product-info p {
-  color: #316C40;
+  color: #4140FF;
   font-family: 'Poppins', sans-serif;
 }
 .product-info button {
-  background: #316C40;
-  color: #FDFFF6;
+  background: #4140FF;
+  color: #FFFFFF;
   border: none;
   padding: 0.5rem 1rem;
   border-radius: 20px;
@@ -83,14 +83,14 @@
 }
 .reviews {
   padding: 2rem;
-  background: rgba(41, 78, 40, 0.2);
+  background: rgba(65, 64, 255, 0.2);
   border-radius: 15px;
   margin: 2rem;
   animation: fadeIn 0.5s ease-out;
 }
 .reviews h2 {
   font-family: 'Poppins', sans-serif;
-  color: #031A09;
+  color: #000000;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -105,13 +105,13 @@
   padding: 0.5rem;
   border: none;
   background: rgba(255, 255, 255, 0.2);
-  color: #031A09;
+  color: #000000;
   font-family: 'Poppins', sans-serif;
   border-radius: 10px;
 }
 .reviews button {
-  background: #E2F87B;
-  color: #031A09;
+  background: #BDF3FF;
+  color: #000000;
   border: none;
   padding: 0.5rem 1rem;
   border-radius: 20px;
@@ -136,7 +136,7 @@
   transform: translateY(-3px);
 }
 .review p {
-  color: #316C40;
+  color: #4140FF;
   font-family: 'Poppins', sans-serif;
 }
 .related-products {
@@ -144,13 +144,13 @@
 }
 .related-products h2 {
   font-family: 'Poppins', sans-serif;
-  color: #031A09;
+  color: #000000;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .product-card {
-  background: linear-gradient(135deg, #FDFFF6, #E2F87B);
+  background: linear-gradient(135deg, #FFFFFF, #F6F6F6);
   border: none;
   padding: 1.5rem;
   border-radius: 15px;
@@ -169,18 +169,18 @@
   border-radius: 10px;
 }
 .product-card h3 {
-  color: #031A09;
+  color: #000000;
   font-family: 'Poppins', sans-serif;
   font-weight: 400;
   margin: 0.5rem 0;
 }
 .product-card p {
-  color: #316C40;
+  color: #4140FF;
   font-family: 'Poppins', sans-serif;
 }
 .product-card button {
-  background: #316C40;
-  color: #FDFFF6;
+  background: #4140FF;
+  color: #FFFFFF;
   border: none;
   padding: 0.5rem 1rem;
   border-radius: 20px;
