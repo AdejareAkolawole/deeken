@@ -244,7 +244,130 @@ footer {
   from { transform: translateY(-100%); }
   to { transform: translateY(0); }
 }
-@keyframes fadeIn {
+@keyframes fadeInUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
+}
+/* Marquee styling */
+.marquee {
+  background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
+  color: #FFFFFF;
+  padding: 0.5rem 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 1.2rem;
+  text-align: center;
+}
+.marquee span {
+  display: inline-block;
+  padding-left: 100%;
+  animation: marquee 8s linear infinite;
+}
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+.cta-section {
+    background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
+    padding: 3rem 1rem;
+    text-align: center;
+    margin: 0;
+    border-radius: 0;
+    font-family: 'Poppins', sans-serif;
+    color: #FFFFFF;
+    width: 100%;
+    box-sizing: border-box;
+}
+.cta-content {
+    max-width: 800px;
+    margin: 0 auto;
+}
+.cta-content h2 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+.cta-content p {
+    font-size: 1.2rem;
+    font-weight: 300;
+    margin-bottom: 1.5rem;
+}
+.social-media {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+}
+.social-media a {
+    color: #FFFFFF;
+    font-size: 1.5rem;
+    text-decoration: none;
+    transition: transform 0.3s, color 0.3s;
+}
+.social-media a:hover {
+    color: #4140FF;
+    transform: scale(1.2);
+}
+.social-media a:focus {
+    outline: 2px solid #FFFFFF;
+    outline-offset: 2px;
+}
+.phone-number {
+    font-size: 1.2rem;
+    font-weight: 400;
+    margin-bottom: 1.5rem;
+}
+.phone-number a {
+    color: #FFFFFF;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+.phone-number a:hover {
+    color: #4140FF;
+}
+.phone-number a:focus {
+    outline: 2px solid #FFFFFF;
+    outline-offset: 2px;
+}
+.cta-button {
+    display: inline-block;
+    background: #4140FF;
+    color: #FFFFFF;
+    padding: 0.75rem 2rem;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: 400;
+    font-size: 1.1rem;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+.cta-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+.cta-button:focus {
+    outline: 2px solid #FFFFFF;
+    outline-offset: 2px;
+}
+@media (max-width: 768px) {
+    .cta-section {
+        padding: 2rem 1rem;
+    }
+    .cta-content h2 {
+        font-size: 1.6rem;
+    }
+    .cta-content p {
+        font-size: 1rem;
+    }
+    .social-media a {
+        font-size: 1.2rem;
+    }
+    .phone-number {
+        font-size: 1rem;
+    }
+    .cta-button {
+        padding: 0.6rem 1.5rem;
+        font-size: 1rem;
+    }
 }
