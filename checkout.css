@@ -1,3 +1,20 @@
+/* ===== CHECKOUT PAGE STYLES ===== */
+
+/* Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* Navigation Styles */
 .navbar {
   background: linear-gradient(135deg, #4140FF, #BDF3FF);
   padding: 1.5rem;
@@ -6,7 +23,11 @@
   align-items: center;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   animation: slideIn 0.5s ease-out;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
+
 .logo {
   font-family: 'Poppins', sans-serif;
   font-weight: 600;
@@ -16,12 +37,19 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  transition: transform 0.3s ease;
 }
+
+.logo:hover {
+  transform: scale(1.05);
+}
+
 .nav-links {
   display: flex;
   list-style: none;
   gap: 1.5rem;
 }
+
 .nav-links a {
   color: #FFFFFF;
   font-family: 'Poppins', sans-serif;
@@ -30,74 +58,379 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: color 0.3s;
+  transition: all 0.3s ease;
+  padding: 0.5rem 1rem;
+  border-radius: 25px;
 }
+
 .nav-links a:hover {
   color: #BDF3FF;
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
 }
+
+/* Main Content */
+main {
+  min-height: calc(100vh - 200px);
+  padding: 2rem 0;
+}
+
+/* Checkout Section */
 .checkout {
-  padding: 2rem;
+  padding: 3rem;
   background: linear-gradient(135deg, #FFFFFF, #F6F6F6);
-  border-radius: 15px;
-  margin: 2rem;
+  border-radius: 20px;
+  margin: 2rem auto;
+  max-width: 800px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   animation: fadeIn 0.5s ease-out;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
+
 .checkout h2 {
   font-family: 'Poppins', sans-serif;
-  color: #000000;
+  color: #2c3e50;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  font-size: 2rem;
+  margin-bottom: 2rem;
+  text-align: center;
+  justify-content: center;
 }
+
+.checkout h2 i {
+  color: #4140FF;
+  font-size: 2.2rem;
+}
+
+/* Form Styles */
 .checkout form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  max-width: 500px;
+  gap: 2rem;
 }
-.checkout input {
-  padding: 0.5rem;
-  border: none;
-  background: rgba(255, 255, 255, 0.2);
-  color: #000000;
+
+.checkout h3 {
   font-family: 'Poppins', sans-serif;
-  border-radius: 10px;
-}
-.checkout button {
-  background: #4140FF;
-  color: #FFFFFF;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  cursor: pointer;
-  font-family: 'Poppins', sans-serif;
+  color: #2c3e50;
+  font-size: 1.4rem;
+  margin-bottom: 1rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: transform 0.3s;
 }
-.checkout button:hover {
-  transform: scale(1.1);
+
+.checkout h3::before {
+  content: '';
+  width: 4px;
+  height: 25px;
+  background: linear-gradient(135deg, #4140FF, #BDF3FF);
+  border-radius: 2px;
 }
-.cart-item {
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  margin: 1rem 0;
-}
-.cart-item h3 {
-  color: #000000;
+
+/* Input Styles */
+.checkout input {
+  padding: 1rem 1.5rem;
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.8);
+  color: #2c3e50;
   font-family: 'Poppins', sans-serif;
+  font-size: 1rem;
+  border-radius: 15px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(5px);
 }
+
+.checkout input:focus {
+  outline: none;
+  border-color: #4140FF;
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(65, 64, 255, 0.2);
+}
+
+.checkout input::placeholder {
+  color: #7f8c8d;
+  font-weight: 300;
+}
+
+/* Order Summary */
+#orderSummary {
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.cart-item {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(189, 243, 255, 0.1));
+  border-radius: 15px;
+  margin: 1.5rem 0;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.cart-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.cart-item h3 {
+  color: #2c3e50;
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
 .cart-item p {
   color: #4140FF;
   font-family: 'Poppins', sans-serif;
+  font-weight: 500;
+  font-size: 1rem;
 }
+
+/* Order Total Section */
+.checkout>p {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.1rem;
+  color: #2c3e50;
+  margin: 0.5rem 0;
+  padding: 0.8rem 1.5rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.checkout>p:last-of-type {
+  font-weight: 600;
+  font-size: 1.3rem;
+  background: linear-gradient(135deg, #4140FF, #BDF3FF);
+  color: white;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(65, 64, 255, 0.3);
+}
+
+/* Button Styles */
+.checkout button {
+  background: linear-gradient(135deg, #4140FF, #6c5ce7);
+  color: #FFFFFF;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 25px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(65, 64, 255, 0.3);
+  margin-top: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.checkout button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(65, 64, 255, 0.4);
+  background: linear-gradient(135deg, #5b4eff, #7c6ce8);
+}
+
+.checkout button:active {
+  transform: translateY(-1px);
+}
+
+.checkout button i {
+  font-size: 1.2rem;
+}
+
+/* Footer Styles */
+footer {
+  background: linear-gradient(135deg, #2c3e50, #3498db);
+  color: white;
+  text-align: center;
+  padding: 2rem;
+  margin-top: 3rem;
+}
+
+footer p {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* Animations */
 @keyframes slideIn {
-  from { transform: translateY(-100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
+
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Loading Animation for Form */
+.checkout form.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.checkout form.loading button {
+  animation: pulse 1s infinite;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .checkout {
+    margin: 1rem;
+    padding: 2rem 1.5rem;
+  }
+
+  .navbar {
+    padding: 1rem;
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  .checkout h2 {
+    font-size: 1.8rem;
+  }
+
+  .checkout input {
+    padding: 0.8rem 1rem;
+  }
+
+  .cart-item {
+    padding: 1rem;
+  }
+
+  .checkout button {
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .checkout {
+    margin: 0.5rem;
+    padding: 1.5rem 1rem;
+  }
+
+  .checkout h2 {
+    font-size: 1.5rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .checkout h3 {
+    font-size: 1.2rem;
+  }
+
+  .cart-item h3 {
+    font-size: 1rem;
+  }
+
+  .cart-item p {
+    font-size: 0.9rem;
+  }
+}
+
+/* Accessibility Improvements */
+.checkout input:focus,
+.checkout button:focus {
+  outline: 3px solid rgba(65, 64, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Success/Error States */
+.checkout .success {
+  background: linear-gradient(135deg, #00b894, #00cec9);
+  color: white;
+  padding: 1rem;
+  border-radius: 10px;
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.checkout .error {
+  background: linear-gradient(135deg, #e17055, #fd79a8);
+  color: white;
+  padding: 1rem;
+  border-radius: 10px;
+  margin: 1rem 0;
+  text-align: center;
+}
+
+/* Enhanced Visual Effects */
+.checkout {
+  position: relative;
+  overflow: hidden;
+}
+
+.checkout::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(189, 243, 255, 0.1) 0%, transparent 70%);
+  animation: rotate 20s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
