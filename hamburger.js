@@ -138,3 +138,27 @@ document.addEventListener('click', (e) => {
         }
     }
 });
+// responsive.js
+
+// ----- NAVBAR SCROLL BEHAVIOR -----
+let lastScrollTop = 0;
+
+window.addEventListener('scroll', function() {
+    const navbar = document.querySelector('.navbar');
+    if (!navbar) {
+        console.error('Navbar not found');
+        return; // Safety check
+    }
+
+    const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+    if (currentScrollTop > lastScrollTop && currentScrollTop > 50) {
+        // Scrolling down and past 50px
+        navbar.classList.add('hidden');
+    } else {
+        // Scrolling up or near top
+        navbar.classList.remove('hidden');
+    }
+
+    lastScrollTop = currentScrollTop <= 0 ? 0 : currentScrollTop; // Prevent negative scroll
+});

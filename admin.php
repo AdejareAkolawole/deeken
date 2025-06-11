@@ -23,10 +23,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'search_products') {
 
     // Prepare search query
     $query = "
-        SELECT p.id, p.name, p.price, i.stock_quantity, p.image, p.category
+        SELECT p.id, p.name, p.price, i.stock_quantity, p.image, c.name AS category, ma.attribute AS misc_attribute
         FROM products p
         LEFT JOIN inventory i ON p.id = i.product_id
-        WHERE p.name LIKE ? OR p.category LIKE ?
+        LEFT JOIN categories c ON p.category_id = c.id
+        LEFT JOIN miscellaneous_attributes ma ON p.id = ma.product_id
+        WHERE p.name LIKE ? OR c.name LIKE ?
     ";
     $stmt = $conn->prepare($query);
     $search_param = "%$search%";
@@ -64,17 +66,42 @@ if (isset($_POST['action']) && $_POST['action'] === 'fetch_orders') {
     exit;
 }
 
+// ----- CATEGORY CREATION HANDLING -----
+if (isset($_POST['add_category'])) {
+    $category_name = trim($_POST['category_name']);
+    $category_description = trim($_POST['category_description']);
+
+    if (empty($category_name)) {
+        $error = "Category name is required.";
+    } else {
+        try {
+            $stmt = $conn->prepare("INSERT INTO categories (name, description) VALUES (?, ?)");
+            $stmt->bind_param("ss", $category_name, $category_description);
+            if ($stmt->execute()) {
+                $success = "Category added successfully.";
+            } else {
+                throw new Exception("Failed to add category.");
+            }
+            $stmt->close();
+        } catch (Exception $e) {
+            $error = "Failed to add category: " . $e->getMessage();
+            error_log($e->getMessage());
+        }
+    }
+}
+
 // ----- PRODUCT ADDITION HANDLING -----
 if (isset($_POST['add_product'])) {
     $product_name = trim($_POST['product_name']);
     $price = (float)$_POST['price'];
     $stock_quantity = (int)$_POST['stock_quantity'];
     $category_id = (int)$_POST['category_id'];
+    $misc_attribute = trim($_POST['misc_attribute']);
     $image_url = 'https://via.placeholder.com/150'; // Default image
 
     // Handle file upload
     if (!empty($_FILES['image']['name'])) {
-        $target_dir = "uploads/";
+        $target_dir = "Uploads/";
         if (!is_dir($target_dir)) {
             mkdir($target_dir, 0777, true);
         }
@@ -82,7 +109,7 @@ if (isset($_POST['add_product'])) {
         $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
         $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
 
-        if (in_array($imageFileType, $allowed_types) && $_FILES['image']['size'] <= 5000000) { // 5MB limit
+        if (in_array($imageFileType, $allowed_types) && $_FILES['image']['size'] <= 5000000) {
             if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
                 $image_url = $target_file;
             } else {
@@ -98,13 +125,12 @@ if (isset($_POST['add_product'])) {
     try {
         // Insert product
         $stmt = $conn->prepare("
-            INSERT INTO products (category_id, name, sku, price, image, description, category)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO products (category_id, name, sku, price, image, description)
+            VALUES (?, ?, ?, ?, ?, ?)
         ");
         $sku = "PROD" . str_pad(mt_rand(1, 99999), 5, '0', STR_PAD_LEFT);
         $description = "Description for " . $product_name;
-        $category_name = $conn->query("SELECT name FROM categories WHERE id = $category_id")->fetch_assoc()['name'] ?? 'Unknown';
-        $stmt->bind_param("issdsss", $category_id, $product_name, $sku, $price, $image_url, $description, $category_name);
+        $stmt->bind_param("issdss", $category_id, $product_name, $sku, $price, $image_url, $description);
         if (!$stmt->execute()) {
             throw new Exception("Failed to add product.");
         }
@@ -118,6 +144,16 @@ if (isset($_POST['add_product'])) {
             throw new Exception("Failed to add inventory.");
         }
         $inv_stmt->close();
+
+        // Insert miscellaneous attribute if selected
+        if (!empty($misc_attribute)) {
+            $attr_stmt = $conn->prepare("INSERT INTO miscellaneous_attributes (product_id, attribute) VALUES (?, ?)");
+            $attr_stmt->bind_param("is", $product_id, $misc_attribute);
+            if (!$attr_stmt->execute()) {
+                throw new Exception("Failed to add miscellaneous attribute.");
+            }
+            $attr_stmt->close();
+        }
 
         // Commit transaction
         $conn->commit();
@@ -142,6 +178,7 @@ if (isset($_POST['delete_product'])) {
         $conn->query("DELETE FROM order_items WHERE product_id = $product_id");
         $conn->query("DELETE FROM reviews WHERE product_id = $product_id");
         $conn->query("DELETE FROM inventory WHERE product_id = $product_id");
+        $conn->query("DELETE FROM miscellaneous_attributes WHERE product_id = $product_id");
 
         // Delete product
         $stmt = $conn->prepare("DELETE FROM products WHERE id = ?");
@@ -234,7 +271,10 @@ $sales_data = [
 
 // ----- FETCH CATEGORY DATA FOR CHART -----
 $category_data = [];
-$result = $conn->query("SELECT category, COUNT(*) as count FROM products GROUP BY category");
+$result = $conn->query("SELECT c.name AS category, COUNT(p.id) as count 
+                        FROM products p 
+                        JOIN categories c ON p.category_id = c.id 
+                        GROUP BY c.id, c.name");
 while ($row = $result->fetch_assoc()) {
     $category_data[$row['category']] = $row['count'];
 }
@@ -242,9 +282,11 @@ while ($row = $result->fetch_assoc()) {
 // ----- FETCH PRODUCTS -----
 $products = [];
 $result = $conn->query("
-    SELECT p.id, p.name, p.price, i.stock_quantity, p.image, p.category
+    SELECT p.id, p.name, p.price, i.stock_quantity, p.image, c.name AS category, ma.attribute AS misc_attribute
     FROM products p
     LEFT JOIN inventory i ON p.id = i.product_id
+    LEFT JOIN categories c ON p.category_id = c.id
+    LEFT JOIN miscellaneous_attributes ma ON p.id = ma.product_id
 ");
 if ($result) {
     while ($row = $result->fetch_assoc()) {
@@ -1162,13 +1204,13 @@ while ($row = $result->fetch_assoc()) {
         </div>
 
         <div id="products" class="tab-content">
-            <!-- Product Management -->
+            <!-- Category Management -->
             <div class="section">
                 <div class="section-header">
-                    <h2 class="section-title">Product Management</h2>
-                    <button class="btn" onclick="toggleProductForm()">
+                    <h2 class="section-title">Category Management</h2>
+                    <button class="btn" onclick="toggleCategoryForm()">
                         <i class="fas fa-plus"></i>
-                        Add Product
+                        Add Category
                     </button>
                 </div>
 
@@ -1188,6 +1230,39 @@ while ($row = $result->fetch_assoc()) {
                     <?php endif; ?>
                 </div>
 
+                <div id="categoryForm" style="display: none;">
+                    <form class="form" method="POST">
+                        <div class="form-group">
+                            <label class="form-label">Category Name</label>
+                            <input type="text" class="form-input" name="category_name" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-input" name="category_description"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" name="add_category" class="btn">
+                                <i class="fas fa-save"></i>
+                                Save Category
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="toggleCategoryForm()">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Product Management -->
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title">Product Management</h2>
+                    <button class="btn" onclick="toggleProductForm()">
+                        <i class="fas fa-plus"></i>
+                        Add Product
+                    </button>
+                </div>
+
                 <div id="productForm" style="display: none;">
                     <form class="form" method="POST" enctype="multipart/form-data">
                         <div class="form-group">
@@ -1204,11 +1279,25 @@ while ($row = $result->fetch_assoc()) {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Category</label>
-                            <select class="form-input" name="category_id" required>
-                                <option value="">Select Category</option>
-                                <?php foreach ($categories as $category): ?>
-                                    <option value="<?php echo $category['id']; ?>"><?php echo htmlspecialchars($category['name']); ?></option>
-                                <?php endforeach; ?>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <select class="form-input" name="category_id" required>
+                                    <option value="">Select Category</option>
+                                    <?php foreach ($categories as $category): ?>
+                                        <option value="<?php echo $category['id']; ?>"><?php echo htmlspecialchars($category['name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <button type="button" class="btn btn-secondary" onclick="toggleCategoryForm()">
+                                    <i class="fas fa-plus"></i> New Category
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Miscellaneous Attribute</label>
+                            <select class="form-input" name="misc_attribute">
+                                <option value="">None</option>
+                                <option value="new_arrival">New Arrival</option>
+                                <option value="featured">Featured</option>
+                                <option value="trending">Trending</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -1236,6 +1325,7 @@ while ($row = $result->fetch_assoc()) {
                                 <th>Price</th>
                                 <th>Stock</th>
                                 <th>Category</th>
+                                <th>Misc Attribute</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -1247,6 +1337,7 @@ while ($row = $result->fetch_assoc()) {
                                 <td>$<?php echo number_format($product['price'], 2); ?></td>
                                 <td><?php echo $product['stock_quantity'] ?? 0; ?></td>
                                 <td><?php echo htmlspecialchars($product['category']); ?></td>
+                                <td><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $product['misc_attribute'] ?? 'None'))); ?></td>
                                 <td>
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this product?');">
                                         <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
@@ -1375,15 +1466,12 @@ while ($row = $result->fetch_assoc()) {
 
         // Tab Switching
         function switchTab(tabId) {
-            // Remove active class from all tabs and contents
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
-            // Add active class to selected tab and content
             document.querySelector(`[onclick="switchTab('${tabId}')"]`).classList.add('active');
             document.getElementById(tabId).classList.add('active');
 
-            // Re-initialize charts if switching to overview
             if (tabId === 'overview') {
                 initCharts();
             }
@@ -1391,11 +1479,9 @@ while ($row = $result->fetch_assoc()) {
 
         // Initialize Charts
         function initCharts() {
-            // Destroy existing charts to prevent duplicates
             if (window.salesChartInstance) window.salesChartInstance.destroy();
             if (window.categoryChartInstance) window.categoryChartInstance.destroy();
 
-            // Sales Chart
             const salesCtx = document.getElementById('salesChart').getContext('2d');
             window.salesChartInstance = new Chart(salesCtx, {
                 type: 'line',
@@ -1434,7 +1520,6 @@ while ($row = $result->fetch_assoc()) {
                 }
             });
 
-            // Category Chart
             const categoryCtx = document.getElementById('categoryChart').getContext('2d');
             window.categoryChartInstance = new Chart(categoryCtx, {
                 type: 'doughnut',
@@ -1483,7 +1568,7 @@ while ($row = $result->fetch_assoc()) {
             .then(products => {
                 tbody.innerHTML = '';
                 if (products.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No products found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No products found.</td></tr>';
                 } else {
                     products.forEach(product => {
                         const row = `
@@ -1493,6 +1578,7 @@ while ($row = $result->fetch_assoc()) {
                                 <td>$${parseFloat(product.price).toFixed(2)}</td>
                                 <td>${product.stock_quantity || 0}</td>
                                 <td>${product.category}</td>
+                                <td>${product.misc_attribute ? product.misc_attribute.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'None'}</td>
                                 <td>
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this product?');">
                                         <input type="hidden" name="product_id" value="${product.id}">
@@ -1509,7 +1595,7 @@ while ($row = $result->fetch_assoc()) {
             })
             .catch(error => {
                 console.error('Error:', error);
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Error loading products.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Error loading products.</td></tr>';
             })
             .finally(() => {
                 tableContainer.classList.remove('loading');
@@ -1521,12 +1607,18 @@ while ($row = $result->fetch_assoc()) {
         document.getElementById('searchInput').addEventListener('input', function() {
             clearTimeout(debounceTimeout);
             debounceTimeout = setTimeout(searchProducts, 300);
-            switchTab('products'); // Switch to products tab on search
+            switchTab('products');
         });
 
         // Toggle Product Form
         function toggleProductForm() {
             const form = document.getElementById('productForm');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Toggle Category Form
+        function toggleCategoryForm() {
+            const form = document.getElementById('categoryForm');
             form.style.display = form.style.display === 'none' ? 'block' : 'none';
         }
 
@@ -1597,9 +1689,9 @@ while ($row = $result->fetch_assoc()) {
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             initTheme();
-            switchTab('overview'); // Default to Overview tab
-            searchProducts(); // Initial product load
-            refreshOrders(); // Initial order load
+            switchTab('overview');
+            searchProducts();
+            refreshOrders();
         });
     </script>
 </body>
