@@ -89,13 +89,87 @@ $cart_count = getCartCount($conn, $user);
     <link rel="stylesheet" href="profile-styles.css">
     <link rel="stylesheet" href="responsive.css">
     <link rel="stylesheet" href="hamburger.css">
+    <style>
+        /* Notification Modal */
+        .notification-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .notification-modal.show {
+            opacity: 1;
+        }
+
+        .modal-content {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.3s ease;
+        }
+
+        .modal-content p {
+            margin: 0 0 15px;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .modal-content p i {
+            color: #e74c3c;
+            margin-right: 8px;
+        }
+
+        .modal-content button {
+            background: #3498db;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .modal-content button:hover {
+            background: #2980b9;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
 </head>
 <body>
+    <!-- Notification Modal -->
+    <div id="profileIncompleteModal" class="notification-modal" style="display: none;">
+        <div class="modal-content">
+            <p><i class="fas fa-exclamation-circle"></i> Please complete your profile information to continue.</p>
+            <button onclick="closeModal()">OK</button>
+        </div>
+    </div>
+
     <header>
         <nav class="navbar">
             <a href="index.php" class="logo"><i class="fas fa-store"></i> Deeken</a>
-         
-            
             <div class="nav-right">
                 <!-- Cart Link -->
                 <a href="cart.php" class="cart-link">
@@ -132,7 +206,6 @@ $cart_count = getCartCount($conn, $user);
                             <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
                             <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
                             <a href="index.php"><i class="fas fa-heart"></i> Home</a>
-                            <a href="settings.php"><i class="fas fa-cog"></i> Settings</a>
                             <hr class="dropdown-divider">
                             <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
                         <?php else: ?>
@@ -144,8 +217,6 @@ $cart_count = getCartCount($conn, $user);
                     </div>
                 </div>
             </div>
-            
-          
         </nav>
         <div class="mobile-nav-overlay" id="mobileNavOverlay"></div>
         <div class="mobile-nav" id="mobileNav" aria-hidden="true" role="navigation" aria-label="Mobile navigation">
@@ -309,6 +380,36 @@ $cart_count = getCartCount($conn, $user);
                 dropdown.classList.remove('show');
             }
         });
+
+        // Check if profile is incomplete and show modal
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get user data from PHP
+            const user = <?php echo json_encode($user); ?>;
+            
+            // Check if full_name or phone is empty
+            if (!user.full_name || !user.phone) {
+                const modal = document.getElementById('profileIncompleteModal');
+                modal.style.display = 'flex';
+                modal.classList.add('show');
+                
+                // Auto-close modal after 5 seconds
+                setTimeout(function() {
+                    modal.classList.remove('show');
+                    setTimeout(function() {
+                        modal.style.display = 'none';
+                    }, 300); // Match transition duration
+                }, 5000);
+            }
+        });
+
+        // Close modal manually
+        function closeModal() {
+            const modal = document.getElementById('profileIncompleteModal');
+            modal.classList.remove('show');
+            setTimeout(function() {
+                modal.style.display = 'none';
+            }, 300); // Match transition duration
+        }
     </script>
 </body>
 </html>

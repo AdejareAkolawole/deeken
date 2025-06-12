@@ -23,24 +23,31 @@ function displayStars($rating) {
     return $stars;
 }
 
+// ----- FETCH TOTAL STOCK FOR METRICS -----
+$total_stock = $conn->query("SELECT SUM(stock_quantity) as sum FROM inventory")->fetch_assoc()['sum'] ?? 0;
+
 // ----- FETCH CATEGORIES -----
 $categories_query = "SELECT id, name FROM categories ORDER BY name";
 $categories_result = $conn->query($categories_query);
 
+// ----- FETCH CAROUSEL IMAGES -----
+$carousel_query = "SELECT * FROM carousel_images WHERE is_active = 1 ORDER BY created_at DESC LIMIT 8";
+$carousel_result = $conn->query($carousel_query);
+
 // ----- FETCH FEATURED PRODUCTS FOR CAROUSEL -----
-$featured_query = "SELECT * FROM products WHERE featured = 1 ORDER BY RAND() LIMIT 8";
+$featured_query = "SELECT p.* FROM products p WHERE p.featured = 1 ORDER BY RAND() LIMIT 8";
 $featured_result = $conn->query($featured_query);
 
 // ----- FETCH TRENDING PRODUCTS -----
-$trending_query = "SELECT * FROM products ORDER BY rating DESC, created_at DESC LIMIT 12";
+$trending_query = "SELECT p.* FROM products p JOIN miscellaneous_attributes ma ON p.id = ma.product_id WHERE ma.attribute = 'trending' ORDER BY p.rating DESC, p.created_at DESC LIMIT 12";
 $trending_result = $conn->query($trending_query);
 
 // ----- FETCH NEW ARRIVALS -----
-$new_arrivals_query = "SELECT * FROM products ORDER BY created_at DESC LIMIT 12";
+$new_arrivals_query = "SELECT p.* FROM products p JOIN miscellaneous_attributes ma ON p.id = ma.product_id WHERE ma.attribute = 'new_arrival' ORDER BY p.created_at DESC LIMIT 12";
 $new_arrivals_result = $conn->query($new_arrivals_query);
 
 // ----- PRODUCT QUERY -----
-$products_query = "SELECT p.* FROM products p JOIN categories c ON p.category_id = c.id";
+$products_query = "SELECT p.*, i.stock_quantity FROM products p JOIN categories c ON p.category_id = c.id LEFT JOIN inventory i ON p.id = i.product_id";
 $search = isset($_GET['search']) ? sanitize($conn, $_GET['search']) : '';
 $category_id = isset($_GET['category_id']) ? (int)$_GET['category_id'] : '';
 $sort = isset($_GET['sort']) ? sanitize($conn, $_GET['sort']) : '';
@@ -77,13 +84,138 @@ $cart_count = getCartCount($conn, $user);
     <title>Deeken - Home</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="responsive.css">
     <link rel="stylesheet" href="hamburger.css">
     <link rel="stylesheet" href="global.css">
- 
+    <style>
+        .out-of-stock {
+            background: #ef4444;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            cursor: not-allowed;
+            margin-top: 8px;
+        }
+        .add-to-cart-btn.out-of-stock {
+            background: #9ca3af; /* Gray for dormant button */
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .cart-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            text-align: center;
+        }
+        .cart-popup.show {
+            display: block;
+        }
+        .cart-popup p {
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        .cart-popup button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        .cart-popup button:hover {
+            background: #2563eb;
+        }
+        .cart-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .cart-overlay.show {
+            display: block;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem 0;
+        }
+        .metric-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-5px);
+        }
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        .metric-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #2a2aff, #bdf3ff);
+            color: white;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #333;
+        }
+        .metric-label {
+            font-size: 1rem;
+            color: #666;
+            margin: 0.5rem 0;
+        }
+        .metric-change {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: #4caf50;
+        }
+        .stock-info {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+    </style>
 </head>
 <body>
+    <!-- ----- CART POPUP ----- -->
+    <div class="cart-overlay" id="cartOverlay"></div>
+    <div class="cart-popup" id="cartPopup">
+        <p>You already have this product in your cart. This action will increase the quantity by 1.</p>
+        <button onclick="confirmAddToCart()">Confirm</button>
+        <button onclick="closeCartPopup()">Cancel</button>
+    </div>
+
     <!-- ----- MARQUEE ----- -->
     <div class="marquee-section">
         <div class="marquee">
@@ -136,7 +268,6 @@ $cart_count = getCartCount($conn, $user);
                         <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
                         <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
                         <a href="index.php"><i class="fas fa-heart"></i> Home</a>
-                        <a href="settings.php"><i class="fas fa-cog"></i> Settings</a>
                         <?php if ($user['is_admin']): ?>
                             <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
                         <?php endif; ?>
@@ -155,49 +286,34 @@ $cart_count = getCartCount($conn, $user);
 
     <!-- ----- HERO CAROUSEL ----- -->
     <div class="hero-carousel" id="heroCarousel">
-        <div class="hero-slide active">
-            <div class="hero-content">
-                <h1>Summer Sale</h1>
-                <p>Up to 70% off on selected items. Don't miss out on our biggest sale of the year!</p>
-                <a href="#products" class="hero-cta">Shop Now <i class="fas fa-arrow-right"></i></a>
+        <?php if ($carousel_result && $carousel_result->num_rows > 0): ?>
+            <?php $first = true; while ($slide = $carousel_result->fetch_assoc()): ?>
+                <div class="hero-slide <?php echo $first ? 'active' : ''; ?>">
+                    <div class="hero-content">
+                        <h1><?php echo htmlspecialchars($slide['title']); ?></h1>
+                        <p><?php echo htmlspecialchars($slide['subtitle']); ?></p>
+                        <a href="<?php echo htmlspecialchars($slide['link'] ?: '#products'); ?>" class="hero-cta">
+                            Shop Now <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+                    <div class="hero-image">
+                        <img src="<?php echo htmlspecialchars($slide['image']); ?>" alt="<?php echo htmlspecialchars($slide['title']); ?>">
+                    </div>
+                </div>
+                <?php $first = false; endwhile; ?>
+        <?php else: ?>
+            <!-- Fallback Slide -->
+            <div class="hero-slide active">
+                <div class="hero-content">
+                    <h1>Welcome to Deeken</h1>
+                    <p>Discover amazing products at unbeatable prices.</p>
+                    <a href="#products" class="hero-cta">Shop Now <i class="fas fa-arrow-right"></i></a>
+                </div>
+                <div class="hero-image">
+                    <img src="https://via.placeholder.com/400x300/667eea/ffffff?text=Welcome" alt="Welcome">
+                </div>
             </div>
-            <div class="hero-image">
-                <img src="https://via.placeholder.com/400x300/667eea/ffffff?text=Summer+Sale" alt="Summer Sale">
-            </div>
-        </div>
-        
-        <div class="hero-slide">
-            <div class="hero-content">
-                <h1>New Arrivals</h1>
-                <p>Discover the latest trends and must-have items for this season.</p>
-                <a href="#new-arrivals" class="hero-cta">Explore <i class="fas fa-star"></i></a>
-            </div>
-            <div class="hero-image">
-                <img src="https://via.placeholder.com/400x300/f093fb/ffffff?text=New+Arrivals" alt="New Arrivals">
-            </div>
-        </div>
-        
-        <div class="hero-slide">
-            <div class="hero-content">
-                <h1>Free Shipping</h1>
-                <p>Get free shipping on all orders over $50. Fast and reliable delivery.</p>
-                <a href="#products" class="hero-cta">Start Shopping <i class="fas fa-truck"></i></a>
-            </div>
-            <div class="hero-image">
-                <img src="https://via.placeholder.com/400x300/4facfe/ffffff?text=Free+Shipping" alt="Free Shipping">
-            </div>
-        </div>
-        
-        <div class="hero-slide">
-            <div class="hero-content">
-                <h1>Premium Quality</h1>
-                <p>Only the best products from trusted brands. Quality guaranteed.</p>
-                <a href="#products" class="hero-cta">View Products <i class="fas fa-gem"></i></a>
-            </div>
-            <div class="hero-image">
-                <img src="https://via.placeholder.com/400x300/43e97b/ffffff?text=Premium+Quality" alt="Premium Quality">
-            </div>
-        </div>
+        <?php endif; ?>
         
         <button class="carousel-arrow prev" onclick="changeSlide(-1)">
             <i class="fas fa-chevron-left"></i>
@@ -207,10 +323,12 @@ $cart_count = getCartCount($conn, $user);
         </button>
         
         <div class="carousel-nav">
-            <span class="nav-dot active" onclick="currentSlide(1)"></span>
-            <span class="nav-dot" onclick="currentSlide(2)"></span>
-            <span class="nav-dot" onclick="currentSlide(3)"></span>
-            <span class="nav-dot" onclick="currentSlide(4)"></span>
+            <?php 
+            $carousel_result->data_seek(0);
+            $count = $carousel_result->num_rows > 0 ? $carousel_result->num_rows : 1;
+            for ($i = 1; $i <= $count; $i++): ?>
+                <span class="nav-dot <?php echo $i === 1 ? 'active' : ''; ?>" onclick="currentSlide(<?php echo $i; ?>)"></span>
+            <?php endfor; ?>
         </div>
     </div>
 
@@ -253,14 +371,16 @@ $cart_count = getCartCount($conn, $user);
                 <button class="carousel-btn" onclick="scrollCarousel('featured', -1)">
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                <button class="carousel-btn" onclick="scrollCarousel('featured', 1)">
+                <button class="btn btn-secondary" onclick="scrollCarousel('featured', 1)">
                     <i class="fas fa-chevron-right"></i>
                 </button>
             </div>
         </div>
         <div class="product-carousel" id="featuredCarousel">
             <div class="product-carousel-track">
-                <?php while ($product = $featured_result->fetch_assoc()): ?>
+                <?php while ($product = $featured_result->fetch_assoc()): 
+                    $stock = $conn->query("SELECT stock_quantity FROM inventory WHERE product_id = {$product['id']}")->fetch_assoc()['stock_quantity'] ?? 0;
+                ?>
                     <div class="carousel-product-card">
                         <a href="product.php?id=<?php echo $product['id']; ?>">
                             <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>">
@@ -269,13 +389,21 @@ $cart_count = getCartCount($conn, $user);
                             <h3><?php echo htmlspecialchars($product['name']); ?></h3>
                             <div class="price">$<?php echo number_format($product['price'], 2); ?></div>
                             <div class="rating"><?php echo displayStars($product['rating']); ?></div>
+                            <div class="stock-info">In Stock: <?php echo $stock; ?></div>
                             <div class="carousel-product-actions">
-                                <form method="POST" action="cart.php" style="flex: 1;">
-                                    <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
-                                    <button type="submit" name="add_to_cart" class="add-to-cart-btn">
+                                <?php if ($stock > 0): ?>
+                                    <form method="POST" action="cart.php" style="flex: 1;" class="cart-form" data-product-id="<?php echo $product['id']; ?>">
+                                        <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
+                                        <button type="button" onclick="checkAddToCart(<?php echo $product['id']; ?>)" class="add-to-cart-btn">
+                                            <i class="fas fa-cart-plus"></i> Add to Cart
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <button class="add-to-cart-btn out-of-stock" disabled>
                                         <i class="fas fa-cart-plus"></i> Add to Cart
                                     </button>
-                                </form>
+                                    <div class="out-of-stock">Out of Stock</div>
+                                <?php endif; ?>
                                 <button onclick="showProductDetails(<?php echo $product['id']; ?>)" class="view-details-btn">
                                     <i class="fas fa-eye"></i>
                                 </button>
@@ -304,22 +432,34 @@ $cart_count = getCartCount($conn, $user);
         </div>
         <div class="product-carousel" id="trendingCarousel">
             <div class="product-carousel-track">
-                <?php while ($product = $trending_result->fetch_assoc()): ?>
+                <?php while ($product = $trending_result->fetch_assoc()): 
+                    $stock = $conn->query("SELECT stock_quantity FROM inventory WHERE product_id = {$product['id']}")->fetch_assoc()['stock_quantity'] ?? 0;
+                ?>
                     <div class="carousel-product-card">
                         <a href="product.php?id=<?php echo $product['id']; ?>">
-                            <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>">
+                            <div class="product-image">
+                                <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>">
+                            </div>
                         </a>
                         <div class="carousel-product-info">
                             <h3><?php echo htmlspecialchars($product['name']); ?></h3>
                             <div class="price">$<?php echo number_format($product['price'], 2); ?></div>
                             <div class="rating"><?php echo displayStars($product['rating']); ?></div>
+                            <div class="stock-info">In Stock: <?php echo $stock; ?></div>
                             <div class="carousel-product-actions">
-                                <form method="POST" action="cart.php" style="flex: 1;">
-                                    <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
-                                    <button type="submit" name="add_to_cart" class="add-to-cart-btn">
+                                <?php if ($stock > 0): ?>
+                                    <form method="POST" action="cart.php" style="flex: 1;" class="cart-form" data-product-id="<?php echo $product['id']; ?>">
+                                        <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
+                                        <button type="button" onclick="checkAddToCart(<?php echo $product['id']; ?>)" class="add-to-cart-btn">
+                                            <i class="fas fa-cart-plus"></i> Add to Cart
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <button class="add-to-cart-btn out-of-stock" disabled>
                                         <i class="fas fa-cart-plus"></i> Add to Cart
                                     </button>
-                                </form>
+                                    <div class="out-of-stock">Out of Stock</div>
+                                <?php endif; ?>
                                 <button onclick="showProductDetails(<?php echo $product['id']; ?>)" class="view-details-btn">
                                     <i class="fas fa-eye"></i>
                                 </button>
@@ -348,7 +488,9 @@ $cart_count = getCartCount($conn, $user);
         </div>
         <div class="product-carousel" id="newArrivalsCarousel">
             <div class="product-carousel-track">
-                <?php while ($product = $new_arrivals_result->fetch_assoc()): ?>
+                <?php while ($product = $new_arrivals_result->fetch_assoc()): 
+                    $stock = $conn->query("SELECT stock_quantity FROM inventory WHERE product_id = {$product['id']}")->fetch_assoc()['stock_quantity'] ?? 0;
+                ?>
                     <div class="carousel-product-card">
                         <a href="product.php?id=<?php echo $product['id']; ?>">
                             <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>">
@@ -357,13 +499,21 @@ $cart_count = getCartCount($conn, $user);
                             <h3><?php echo htmlspecialchars($product['name']); ?></h3>
                             <div class="price">$<?php echo number_format($product['price'], 2); ?></div>
                             <div class="rating"><?php echo displayStars($product['rating']); ?></div>
+                            <div class="stock-info">In Stock: <?php echo $stock; ?></div>
                             <div class="carousel-product-actions">
-                                <form method="POST" action="cart.php" style="flex: 1;">
-                                    <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
-                                    <button type="submit" name="add_to_cart" class="add-to-cart-btn">
+                                <?php if ($stock > 0): ?>
+                                    <form method="POST" action="cart.php" style="flex: 1;" class="cart-form" data-product-id="<?php echo $product['id']; ?>">
+                                        <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
+                                        <button type="button" onclick="checkAddToCart(<?php echo $product['id']; ?>)" class="add-to-cart-btn">
+                                            <i class="fas fa-cart-plus"></i> Add to Cart
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <button class="add-to-cart-btn out-of-stock" disabled>
                                         <i class="fas fa-cart-plus"></i> Add to Cart
                                     </button>
-                                </form>
+                                    <div class="out-of-stock">Out of Stock</div>
+                                <?php endif; ?>
                                 <button onclick="showProductDetails(<?php echo $product['id']; ?>)" class="view-details-btn">
                                     <i class="fas fa-eye"></i>
                                 </button>
@@ -411,11 +561,21 @@ $cart_count = getCartCount($conn, $user);
                                 <h3><?php echo htmlspecialchars($product['name']); ?></h3>
                                 <p>$<?php echo number_format($product['price'], 2); ?></p>
                                 <p><?php echo displayStars($product['rating']); ?></p>
+                                <p class="stock-info">In Stock: <?php echo $product['stock_quantity']; ?></p>
                             </a>
-                            <form method="POST" action="cart.php">
-                                <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
-                                <button type="submit" name="add_to_cart"><i class="fas fa-cart-plus"></i> Add to Cart</button>
-                            </form>
+                            <?php if ($product['stock_quantity'] > 0): ?>
+                                <form method="POST" action="cart.php" class="cart-form" data-product-id="<?php echo $product['id']; ?>">
+                                    <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
+                                    <button type="button" onclick="checkAddToCart(<?php echo $product['id']; ?>)" class="add-to-cart-btn">
+                                        <i class="fas fa-cart-plus"></i> Add to Cart
+                                    </button>
+                                </form>
+                            <?php else: ?>
+                                <button class="add-to-cart-btn out-of-stock" disabled>
+                                    <i class="fas fa-cart-plus"></i> Add to Cart
+                                </button>
+                                <div class="out-of-stock">Out of Stock</div>
+                            <?php endif; ?>
                             <button onclick="showProductDetails(<?php echo $product['id']; ?>)"><i class="fas fa-eye"></i> View Details</button>
                         </div>
                     <?php endwhile; ?>
@@ -478,7 +638,7 @@ $cart_count = getCartCount($conn, $user);
                 </ul>
             </div>
             
-                        <div class="footer-section">
+            <div class="footer-section">
                 <h3>Connect With Us</h3>
                 <div class="social-links">
                     <a href="https://www.facebook.com/deeken"><i class="fab fa-facebook-f"></i></a>
@@ -496,7 +656,7 @@ $cart_count = getCartCount($conn, $user);
         
         <div class="footer-bottom">
             <div class="footer-bottom-content">
-                <p>&copy; <?php echo date('Y'); ?> Deeken. All rights reserved.</p>
+                <p>© <?php echo date('Y'); ?> Deeken. All rights reserved.</p>
                 <div class="footer-links">
                     <a href="terms.php">Terms of Service</a>
                     <a href="privacy.php">Privacy Policy</a>
@@ -507,292 +667,644 @@ $cart_count = getCartCount($conn, $user);
     </footer>
 
     <!-- ----- JAVASCRIPT ----- -->
+    <script src="utils.js"></script>
     <script>
-        // ----- PROFILE DROPDOWN -----
-        function toggleProfileDropdown() {
-            const dropdown = document.getElementById('profileDropdown');
-            dropdown.classList.toggle('show');
+        // Enhanced Product Carousel with Auto-Scroll
+        class ProductCarousel {
+            constructor(carouselId, autoScrollInterval = 3000) {
+                this.carouselId = carouselId;
+                this.carousel = document.getElementById(carouselId + 'Carousel');
+                this.track = this.carousel?.querySelector('.product-carousel-track');
+                this.cards = this.track?.children || [];
+                this.position = 0;
+                this.cardWidth = 280 + 24; // card width + gap
+                this.autoScrollInterval = autoScrollInterval;
+                this.isAutoScrolling = true;
+                this.autoScrollTimer = null;
+                
+                if (this.carousel && this.track && this.cards.length > 0) {
+                    this.init();
+                }
+            }
+            
+            init() {
+                // Start auto-scroll
+                this.startAutoScroll();
+                
+                // Pause auto-scroll on hover
+                this.carousel.addEventListener('mouseenter', () => {
+                    this.pauseAutoScroll();
+                });
+                
+                // Resume auto-scroll when mouse leaves
+                this.carousel.addEventListener('mouseleave', () => {
+                    this.startAutoScroll();
+                });
+                
+                // Handle visibility change (pause when tab is not active)
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        this.pauseAutoScroll();
+                    } else if (this.isAutoScrolling) {
+                        this.startAutoScroll();
+                    }
+                });
+            }
+            
+            scrollToNext() {
+                const containerWidth = this.carousel.offsetWidth;
+                const totalWidth = this.cards.length * this.cardWidth;
+                const maxScroll = Math.max(0, totalWidth - containerWidth);
+                
+                // Move to next position
+                this.position += this.cardWidth;
+                
+                // If we've reached the end, reset to beginning with smooth transition
+                if (this.position >= maxScroll) {
+                    this.position = 0;
+                }
+                
+                this.updatePosition();
+            }
+            
+            scrollToPrev() {
+                // Move to previous position
+                this.position -= this.cardWidth;
+                
+                // If we've reached the beginning, go to end
+                if (this.position < 0) {
+                    const containerWidth = this.carousel.offsetWidth;
+                    const totalWidth = this.cards.length * this.cardWidth;
+                    const maxScroll = Math.max(0, totalWidth - containerWidth);
+                    this.position = maxScroll;
+                }
+                
+                this.updatePosition();
+            }
+            
+            updatePosition() {
+                if (this.track) {
+                    this.track.style.transform = `translateX(-${this.position}px)`;
+                }
+            }
+            
+            startAutoScroll() {
+                if (!this.isAutoScrolling || this.cards.length <= 3) return;
+                
+                this.pauseAutoScroll(); // Clear any existing timer
+                this.autoScrollTimer = setInterval(() => {
+                    this.scrollToNext();
+                }, this.autoScrollInterval);
+            }
+            
+            pauseAutoScroll() {
+                if (this.autoScrollTimer) {
+                    clearInterval(this.autoScrollTimer);
+                    this.autoScrollTimer = null;
+                }
+            }
+            
+            toggleAutoScroll() {
+                this.isAutoScrolling = !this.isAutoScrolling;
+                if (this.isAutoScrolling) {
+                    this.startAutoScroll();
+                } else {
+                    this.pauseAutoScroll();
+                }
+            }
+            
+            // Manual scroll method for buttons
+            manualScroll(direction) {
+                this.pauseAutoScroll();
+                
+                if (direction > 0) {
+                    this.scrollToNext();
+                } else {
+                    this.scrollToPrev();
+                }
+                
+                // Resume auto-scroll after a delay
+                setTimeout(() => {
+                    if (this.isAutoScrolling) {
+                        this.startAutoScroll();
+                    }
+                }, 3000);
+            }
         }
 
+        // Handle navbar scroll behavior
+        let lastScrollTop = 0;
+        const navbar = document.querySelector('.navbar');
+
+        window.addEventListener('scroll', function() {
+            let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+            
+            if (currentScroll > lastScrollTop && currentScroll > 100) {
+                // Scrolling down & past 100px
+                navbar.classList.add('hidden');
+            } else if (currentScroll <= 100) {
+                // At or near top
+                navbar.classList.remove('hidden');
+            }
+            
+            lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+        });
+
+        // Toggle category dropdown
+        function toggleCategoryDropdown() {
+            const categoryToggle = document.getElementById('categoryToggle');
+            const categoryList = document.getElementById('categoryList');
+            
+            if (categoryToggle && categoryList) {
+                categoryToggle.classList.toggle('active');
+                categoryList.classList.toggle('show');
+            }
+        }
+
+        // Event listener for category toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const categoryToggle = document.getElementById('categoryToggle');
+            if (categoryToggle) {
+                categoryToggle.addEventListener('click', toggleCategoryDropdown);
+            }
+
+            // Close category dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                const categoryDropdown = document.querySelector('.category-dropdown');
+                const categoryList = document.getElementById('categoryList');
+                if (categoryDropdown && categoryList && !categoryDropdown.contains(event.target)) {
+                    categoryToggle.classList.remove('active');
+                    categoryList.classList.remove('show');
+                }
+            });
+        });
+
+        // Hero Carousel
+        let currentSlideIndex = 0;
+        const slides = document.querySelectorAll('.hero-slide');
+        const dots = document.querySelectorAll('.nav-dot');
+        
+        function showSlide(index) {
+            slides.forEach((slide, i) => {
+                slide.classList.remove('active', 'prev');
+                dots[i].classList.remove('active');
+                
+                if (i === index) {
+                    slide.classList.add('active');
+                    dots[i].classList.add('active');
+                } else if (i < index) {
+                    slide.classList.add('prev');
+                }
+            });
+        }
+        
+        function changeSlide(direction) {
+            currentSlideIndex += direction;
+            if (currentSlideIndex >= slides.length) currentSlideIndex = 0;
+            if (currentSlideIndex < 0) currentSlideIndex = slides.length - 1;
+            showSlide(currentSlideIndex);
+        }
+        
+        function currentSlide(index) {
+            currentSlideIndex = index - 1;
+            showSlide(currentSlideIndex);
+        }
+        
+        // Auto-advance hero slides
+        setInterval(() => {
+            changeSlide(1);
+        }, 5000);
+
+        // Initialize product carousels when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize auto-scrolling carousels with different intervals
+            const featuredCarousel = new ProductCarousel('featured', 4000); // 4 seconds
+            const trendingCarousel = new ProductCarousel('trending', 3500); // 3.5 seconds
+            const newArrivalsCarousel = new ProductCarousel('newArrivals', 4500); // 4.5 seconds
+            
+            // Store carousel instances globally for manual control
+            window.productCarousels = {
+                featured: featuredCarousel,
+                trending: trendingCarousel,
+                newArrivals: newArrivalsCarousel
+            };
+
+            // Add auto-scroll indicators
+            setTimeout(() => {
+                addAutoScrollIndicators();
+            }, 500);
+        });
+
+        // Enhanced manual scroll function for buttons
+        function scrollCarousel(carouselId, direction) {
+            if (window.productCarousels && window.productCarousels[carouselId]) {
+                window.productCarousels[carouselId].manualScroll(direction);
+            }
+        }
+
+        // Add auto-scroll indicators to carousels
+        function addAutoScrollIndicators() {
+            const carousels = ['featured', 'trending', 'newArrivals'];
+            
+            carousels.forEach(carouselId => {
+                const carousel = document.getElementById(carouselId + 'Carousel');
+                if (carousel && carousel.querySelector('.product-carousel-track').children.length > 3) {
+                    const indicator = document.createElement('div');
+                    indicator.className = 'carousel-auto-indicator';
+                    indicator.innerHTML = '<i class="fas fa-play"></i> Auto-scroll';
+                    indicator.id = carouselId + 'Indicator';
+                    carousel.style.position = 'relative';
+                    carousel.appendChild(indicator);
+                    
+                    // Add click handler to toggle auto-scroll
+                    indicator.addEventListener('click', () => {
+                        toggleCarouselAutoScroll(carouselId);
+                    });
+                }
+            });
+        }
+
+        // Add pause/play functionality
+        function toggleCarouselAutoScroll(carouselId) {
+            if (window.productCarousels && window.productCarousels[carouselId]) {
+                const carousel = window.productCarousels[carouselId];
+                const indicator = document.getElementById(carouselId + 'Indicator');
+                
+                carousel.toggleAutoScroll();
+                
+                if (indicator) {
+                    if (carousel.isAutoScrolling) {
+                        indicator.innerHTML = '<i class="fas fa-play"></i> Auto-scroll';
+                        indicator.classList.remove('paused');
+                    } else {
+                        indicator.innerHTML = '<i class="fas fa-pause"></i> Paused';
+                        indicator.classList.add('paused');
+                    }
+                }
+            }
+        }
+
+        // Search products with filters
+        function searchProducts() {
+            const search = document.getElementById('searchInput').value;
+            const category_id = document.querySelector('.category-list a.active')?.href.match(/category_id=(\d+)/)?.[1] || '';
+            const sort = document.getElementById('sortFilter').value;
+            window.location.href = `index.php?search=${encodeURIComponent(search)}&category_id=${encodeURIComponent(category_id)}&sort=${encodeURIComponent(sort)}`;
+        }
+
+        // Autocomplete functionality
+        const searchInput = document.getElementById('searchInput');
+        const autocompleteSuggestions = document.getElementById('autocompleteSuggestions');
+
+        if (searchInput && autocompleteSuggestions) {
+            searchInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                if (query.length < 2) {
+                    autocompleteSuggestions.innerHTML = '';
+                    autocompleteSuggestions.style.display = 'none';
+                    return;
+                }
+
+                fetch(`autocomplete.php?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        autocompleteSuggestions.innerHTML = '';
+                        if (data.length > 0) {
+                            data.forEach(item => {
+                                const li = document.createElement('li');
+                                li.textContent = item.name;
+                                li.addEventListener('click', () => {
+                                    searchInput.value = item.name;
+                                    autocompleteSuggestions.innerHTML = '';
+                                    autocompleteSuggestions.style.display = 'none';
+                                    searchProducts();
+                                });
+                                autocompleteSuggestions.appendChild(li);
+                            });
+                            autocompleteSuggestions.style.display = 'block';
+                        } else {
+                            autocompleteSuggestions.style.display = 'none';
+                        }
+                    })
+                    .catch(error => console.error('Error fetching autocomplete:', error));
+            });
+
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!searchInput.contains(event.target) && !autocompleteSuggestions.contains(event.target)) {
+                    autocompleteSuggestions.innerHTML = '';
+                    autocompleteSuggestions.style.display = 'none';
+                }
+            });
+        }
+
+        // Check if product is in cart before adding
+        let currentProductId = null;
+
+        function checkAddToCart(productId) {
+            <?php if ($user): ?>
+                currentProductId = productId;
+                
+                // First, check stock
+                fetch('check_stock.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `product_id=${productId}`
+                })
+                .then(response => response.json())
+                .then(stockData => {
+                    if (stockData.stock <= 0) {
+                        alert('This product is out of stock.');
+                        return;
+                    }
+                    
+                    // Then check cart
+                    fetch('check_cart.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `product_id=${productId}&user_id=<?php echo $user['id']; ?>`
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            console.error('Error:', data.error);
+                            submitCartForm(productId);
+                            return;
+                        }
+                        if (data.exists) {
+                            showCartPopup();
+                        } else {
+                            submitCartForm(productId);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking cart:', error);
+                        submitCartForm(productId);
+                    });
+                })
+                .catch(error => console.error('Error checking stock:', error));
+            <?php else: ?>
+                window.location.href = 'login.php';
+            <?php endif; ?>
+        }
+
+        function showCartPopup() {
+            const popup = document.getElementById('cartPopup');
+            const overlay = document.getElementById('cartOverlay');
+            if (popup && overlay) {
+                popup.classList.add('show');
+                overlay.classList.add('show');
+            }
+        }
+
+        function closeCartPopup() {
+            const popup = document.getElementById('cartPopup');
+            const overlay = document.getElementById('cartOverlay');
+            if (popup && overlay) {
+                popup.classList.remove('show');
+                overlay.classList.remove('show');
+            }
+            currentProductId = null;
+        }
+
+        function confirmAddToCart() {
+            if (currentProductId) {
+                submitCartForm(currentProductId);
+            }
+            closeCartPopup();
+        }
+
+        function submitCartForm(productId) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'cart.php';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'product_id';
+            input.value = productId;
+            
+            const addToCartInput = document.createElement('input');
+            addToCartInput.type = 'hidden';
+            addToCartInput.name = 'add_to_cart';
+            addToCartInput.value = '1';
+            
+            form.appendChild(input);
+            form.appendChild(addToCartInput);
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        // Show product details in modal
+        function showProductDetails(id) {
+            fetch(`product.php?id=${id}`)
+                .then(response => response.text())
+                .then(data => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(data, 'text/html');
+                    const productDetails = doc.querySelector('.product-details');
+                    if (productDetails) {
+                        const modal = document.getElementById('productModal');
+                        if (modal) {
+                            modal.querySelector('.modal-content').innerHTML = `
+                                <span class="close-modal"><i class="fas fa-times"></i></span>
+                                ${productDetails.innerHTML}
+                            `;
+                            modal.classList.add('show');
+                            modal.querySelector('.close-modal').addEventListener('click', () => modal.classList.remove('show'));
+                        }
+                    }
+                })
+                .catch(error => console.error('Error fetching product details:', error));
+        }
+        
+        // Toggle profile dropdown
+        function toggleProfileDropdown() {
+            const dropdown = document.getElementById('profileDropdown');
+            if (dropdown) {
+                dropdown.classList.toggle('show');
+            }
+        }
+        
         // Close dropdown when clicking outside
         document.addEventListener('click', function(event) {
+            const profileDropdown = document.querySelector('.profile-dropdown');
             const dropdown = document.getElementById('profileDropdown');
-            const trigger = document.querySelector('.profile-trigger');
-            if (!dropdown.contains(event.target) && !trigger.contains(event.target)) {
+            if (profileDropdown && dropdown && !profileDropdown.contains(event.target)) {
                 dropdown.classList.remove('show');
             }
         });
 
-        // ----- HERO CAROUSEL -----
-        let currentSlideIndex = 1;
-        let autoSlideInterval;
-
-        function changeSlide(direction) {
-            const slides = document.querySelectorAll('.hero-slide');
-            const dots = document.querySelectorAll('.nav-dot');
-            
-            slides[currentSlideIndex - 1].classList.remove('active');
-            slides[currentSlideIndex - 1].classList.add('prev');
-            dots[currentSlideIndex - 1].classList.remove('active');
-
-            currentSlideIndex = (currentSlideIndex + direction - 1 + slides.length) % slides.length + 1;
-
-            slides[currentSlideIndex - 1].classList.remove('prev');
-            slides[currentSlideIndex - 1].classList.add('active');
-            dots[currentSlideIndex - 1].classList.add('active');
-
-            resetAutoSlide();
-        }
-
-        function currentSlide(index) {
-            const slides = document.querySelectorAll('.hero-slide');
-            const dots = document.querySelectorAll('.nav-dot');
-            
-            slides[currentSlideIndex - 1].classList.remove('active');
-            slides[currentSlideIndex - 1].classList.add('prev');
-            dots[currentSlideIndex - 1].classList.remove('active');
-
-            currentSlideIndex = index;
-
-            slides[currentSlideIndex - 1].classList.remove('prev');
-            slides[currentSlideIndex - 1].classList.add('active');
-            dots[currentSlideIndex - 1].classList.add('active');
-
-            resetAutoSlide();
-        }
-
-        function autoSlide() {
-            changeSlide(1);
-        }
-
-        function resetAutoSlide() {
-            clearInterval(autoSlideInterval);
-            autoSlideInterval = setInterval(autoSlide, 5000);
-        }
-
-        // Initialize auto slide
-        resetAutoSlide();
-
-        // Pause on hover
-        const carousel = document.getElementById('heroCarousel');
-        carousel.addEventListener('mouseenter', () => clearInterval(autoSlideInterval));
-        carousel.addEventListener('mouseleave', resetAutoSlide);
-
-        // ----- PRODUCT CAROUSEL -----
-        function scrollCarousel(carouselId, direction) {
-            const carousel = document.getElementById(`${carouselId}Carousel`);
-            const track = carousel.querySelector('.product-carousel-track');
-            const cards = track.querySelectorAll('.carousel-product-card');
-            const cardWidth = cards[0].offsetWidth + 24; // Including gap
-            const visibleWidth = carousel.offsetWidth;
-            const maxScroll = track.scrollWidth - visibleWidth;
-            let currentTransform = parseFloat(getComputedStyle(track).transform.split(',')[4]) || 0;
-
-            let newTransform = currentTransform + (direction * cardWidth * 3);
-            newTransform = Math.max(Math.min(newTransform, 0), -maxScroll);
-
-            track.style.transform = `translateX(${newTransform}px)`;
-        }
-
-        // Auto-scroll for carousels
-        const carousels = ['featured', 'trending', 'newArrivals'];
-        const autoScrollIntervals = {};
-
-        carousels.forEach(carouselId => {
-            const carousel = document.getElementById(`${carouselId}Carousel`);
-            if (carousel) {
-                let isAutoScrolling = true;
-
-                function autoScroll() {
-                    if (!isAutoScrolling) return;
-                    scrollCarousel(carouselId, 1);
-                }
-
-                autoScrollIntervals[carouselId] = setInterval(autoScroll, 3000);
-
-                // Add auto-scroll indicator
-                const indicator = document.createElement('div');
-                indicator.className = 'carousel-auto-indicator';
-                indicator.innerHTML = '<i class="fas fa-pause"></i> Pause';
-                carousel.appendChild(indicator);
-
-                // Toggle auto-scroll on click
-                indicator.addEventListener('click', () => {
-                    isAutoScrolling = !isAutoScrolling;
-                    indicator.innerHTML = isAutoScrolling 
-                        ? '<i class="fas fa-pause"></i> Pause' 
-                        : '<i class="fas fa-play"></i> Play';
-                    indicator.classList.toggle('paused', !isAutoScrolling);
-                });
-
-                // Pause on hover
-                carousel.addEventListener('mouseenter', () => {
-                    isAutoScrolling = false;
-                    indicator.classList.add('paused');
-                    indicator.innerHTML = '<i class="fas fa-play"></i> Play';
-                });
-
-                carousel.addEventListener('mouseleave', () => {
-                    isAutoScrolling = true;
-                    indicator.classList.remove('paused');
-                    indicator.innerHTML = '<i class="fas fa-pause"></i> Pause';
-                });
-            }
-        });
-
-        // ----- SEARCH FUNCTIONALITY -----
-        function searchProducts() {
-            const searchInput = document.getElementById('searchInput').value.trim();
-            const categoryId = new URLSearchParams(window.location.search).get('category_id') || '';
-            const sort = document.getElementById('sortFilter').value;
-
-            let queryParams = [];
-            if (searchInput) queryParams.push(`search=${encodeURIComponent(searchInput)}`);
-            if (categoryId) queryParams.push(`category_id=${categoryId}`);
-            if (sort) queryParams.push(`sort=${sort}`);
-
-            window.location.href = `index.php${queryParams.length ? '?' + queryParams.join('&') : ''}`;
-        }
-
-        // ----- AUTOCOMPLETE -----
-        const searchInput = document.getElementById('searchInput');
-        const autocompleteSuggestions = document.getElementById('autocompleteSuggestions');
-
-        searchInput.addEventListener('input', function() {
-            const query = this.value.trim();
-            if (query.length < 2) {
-                autocompleteSuggestions.style.display = 'none';
-                return;
-            }
-
-            fetch(`autocomplete.php?query=${encodeURIComponent(query)}`)
-                .then(response => response.json())
-                .then(data => {
-                    autocompleteSuggestions.innerHTML = '';
-                    if (data.length > 0) {
-                        data.forEach(item => {
-                            const li = document.createElement('li');
-                            li.textContent = item.name;
-                            li.addEventListener('click', () => {
-                                searchInput.value = item.name;
-                                autocompleteSuggestions.style.display = 'none';
-                                searchProducts();
-                            });
-                            autocompleteSuggestions.appendChild(li);
-                        });
-                        autocompleteSuggestions.style.display = 'block';
-                    } else {
-                        autocompleteSuggestions.style.display = 'none';
-                    }
-                })
-                .catch(error => console.error('Error fetching autocomplete:', error));
-        });
-
-        // Close autocomplete when clicking outside
-        document.addEventListener('click', function(event) {
-            if (!searchInput.contains(event.target) && !autocompleteSuggestions.contains(event.target)) {
-                autocompleteSuggestions.style.display = 'none';
-            }
-        });
-
-        // Trigger search on Enter key
-        searchInput.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter') {
-                searchProducts();
-            }
-        });
-
-        // ----- PRODUCT MODAL -----
-        function showProductDetails(productId) {
-            fetch(`product_details.php?id=${productId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.error(data.error);
-                        return;
-                    }
-
-                    document.getElementById('modalImage').src = data.image;
-                    document.getElementById('modalImage').alt = data.name;
-                    document.getElementById('modalName').textContent = data.name;
-                    document.getElementById('modalPrice').textContent = `$${parseFloat(data.price).toFixed(2)}`;
-                    document.getElementById('modalRating').innerHTML = generateStars(data.rating);
-                    document.getElementById('modalDescription').textContent = data.description || 'No description available.';
-                    document.querySelector('#productModal a').href = `product.php?id=${productId}`;
-
-                    document.getElementById('productModal').classList.add('show');
-                })
-                .catch(error => console.error('Error fetching product details:', error));
-        }
-
-        function generateStars(rating) {
-            let stars = '';
-            for (let i = 1; i <= 5; i++) {
-                stars += `<i class="fas fa-star ${i <= rating ? 'star-filled' : 'star-empty'}"></i>`;
-            }
-            return stars;
-        }
-
-        // Close modal
-        document.querySelector('.close-modal').addEventListener('click', function() {
-            document.getElementById('productModal').classList.remove('show');
-        });
-
-        // Close modal when clicking outside
-        document.getElementById('productModal').addEventListener('click', function(event) {
-            if (event.target === this) {
-                this.classList.remove('closed');
-            }
-        });
-
-        // ----- NAVBAR SCROLL BEHAVIOR -----
-        let lastScrollTop = 0;
-        window.addEventListener('scroll', function() {
-            const navbar = document.querySelector('.navbar');
-            const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
-
-            if (currentScrollTop > lastScrollTop) {
-                // Scrolling down
-                navbar.classList.add('hidden');
-            } else {
-                // Scrolling up
-                navbar.classList.remove('hidden');
-            }
-            lastScrollTop = currentScrollTop <= 0 ? 0 : currentScrollTop; // Prevent negative scroll
-        });
-
-        // ----- CATEGORY DROPDOWN -----
-        const categoryToggle = document.getElementById('categoryToggle');
-        const categoryList = document.getElementById('categoryList');
-
-        if (categoryToggle && categoryList) {
-            categoryToggle.addEventListener('click', function() {
-                categoryList.classList.toggle('show');
-                categoryToggle.classList.toggle('active');
-            });
-
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(event) {
-                if (!categoryToggle.contains(event.target) && !categoryList.contains(event.target)) {
-                    categoryList.classList.remove('show');
-                    categoryToggle.classList.remove('active');
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
                 }
             });
+        });
 
-            // Update toggle text when a category is selected
-            categoryList.querySelectorAll('a').forEach(link => {
-                link.addEventListener('click', function() {
-                    categoryToggle.childNodes[0].textContent = this.textContent;
-                    categoryList.classList.remove('show');
-                    categoryToggle.classList.remove('active');
-                });
+        // Add scroll animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.animation = 'fadeInUp 0.6s ease-out forwards';
+                }
             });
-        }
+        }, observerOptions);
+
+        // Observe carousel sections
+        document.querySelectorAll('.product-carousel-section, .category-carousel').forEach(section => {
+            observer.observe(section);
+        });
+
+        // Add enhanced CSS styles
+        const enhancedStyles = document.createElement('style');
+        enhancedStyles.textContent = `
+            .product-carousel-track {
+                transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            }
+            
+            .product-carousel:hover .product-carousel-track {
+                transition-duration: 0.3s;
+            }
+            
+            /* Auto-scroll indicator */
+            .carousel-auto-indicator {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 5px 10px;
+                border-radius: 15px;
+                font-size: 12px;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+                cursor: pointer;
+                z-index: 10;
+            }
+            
+            .product-carousel:hover .carousel-auto-indicator {
+                opacity: 1;
+            }
+            
+            .carousel-auto-indicator.paused {
+                background: rgba(255, 193, 7, 0.9);
+                color: #333;
+            }
+            
+            .carousel-auto-indicator:hover {
+                transform: scale(1.05);
+            }
+            
+            /* Enhanced carousel controls */
+            .carousel-controls {
+                gap: 15px;
+            }
+            
+            .carousel-btn {
+                position: relative;
+                overflow: hidden;
+            }
+            
+            .carousel-btn:hover::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(45deg, transparent, rgba(255,255,255,0.2), transparent);
+                transform: translateX(-100%);
+                animation: shimmer 0.6s ease-out;
+            }
+            
+            @keyframes shimmer {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(100%); }
+            }
+            
+            /* Progressive loading effect */
+            .carousel-product-card {
+                position: relative;
+                overflow: hidden;
+            }
+            
+            .carousel-product-card::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: -100%;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+                transition: left 0.5s;
+                z-index: 1;
+                pointer-events: none;
+            }
+            
+            .carousel-product-card:hover::before {
+                left: 100%;
+            }
+
+            /* Mobile responsive */
+            @media (max-width: 768px) {
+                .product-carousel-track {
+                    gap: 1rem;
+                }
+                
+                .carousel-product-card {
+                    min-width: 250px;
+                }
+                
+                .carousel-auto-indicator {
+                    font-size: 10px;
+                    padding: 3px 8px;
+                }
+            @media (products) {
+                .product-card {
+                    width: calc(100% - 30px);
+                }
+                
+                .carousel-product-card {
+                    min-width: calc(100% - 50px);
+                }
+                
+                .product-section {
+                    margin: 2rem 0;
+                }
+                
+                .section-header {
+                    flex-direction: column;
+                    gap: 1rem;
+                    align-items: flex-start;
+                }
+                
+                .controls-product-controls {
+                    align-self: flex-end;
+                }
+            }
+        `;
+        document.head.appendChild(enhancedStyles);
     </script>
 </body>
 </html>
-
 <?php
-// Close database connection
+// ----- CLEANUP -----
 $conn->close();
 ?>

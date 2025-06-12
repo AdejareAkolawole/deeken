@@ -1,19 +1,20 @@
 <?php
-// ----- INITIALIZATION -----
-include 'config.php';
+require_once 'config.php';
 
 // Enable error reporting for debugging (remove in production)
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// ----- LOGIN HANDLING -----
+// Login handling
 $error = '';
 if (isset($_POST['login'])) {
-    $email = sanitize($conn, $_POST['email']);
-    $password = $_POST['password'];
+    $email = sanitize($conn, $_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    
     $user = authenticateUser($conn, $email, $password);
     if ($user) {
+        $_SESSION['user_id'] = $user['id']; // Set for orders.php
         $_SESSION['user'] = $user;
         header("Location: index.php");
         exit;
@@ -21,26 +22,18 @@ if (isset($_POST['login'])) {
         $error = "Invalid email or password.";
     }
 }
-
-// ----- LOGOUT HANDLING -----
-if (isset($_GET['logout'])) {
-    session_destroy();
-    header("Location: login.php");
-    exit;
-}
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Meta and CSS -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deeken - Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* Inline CSS from login.html (already provided in previous message, included for completeness) */
         :root {
             --primary: #6366f1;
             --primary-dark: #4f46e5;
@@ -65,14 +58,13 @@ if (isset($_GET['logout'])) {
 
         body {
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #2A2AFF ,#BDF3FF );
+            background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
             min-height: 100vh;
             overflow-x: hidden;
             position: relative;
             color: var(--text-primary);
         }
 
-        /* Animated background */
         .bg-animation {
             position: fixed;
             top: 0;
@@ -127,9 +119,8 @@ if (isset($_GET['logout'])) {
             66% { transform: translateY(15px) rotate(240deg); }
         }
 
-        /* Navigation */
         .navbar {
-            background: linear-gradient(135deg, #BDF3FF #2A2AFF);
+            background: linear-gradient(135deg, #BDF3FF, #2A2AFF);
             backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--border);
             padding: 1rem 2rem;
@@ -217,7 +208,6 @@ if (isset($_GET['logout'])) {
             background: var(--glass);
         }
 
-        /* Main Container */
         .main-container {
             display: flex;
             justify-content: center;
@@ -270,7 +260,6 @@ if (isset($_GET['logout'])) {
             font-size: 0.95rem;
         }
 
-        /* Social Login */
         .social-login {
             display: flex;
             gap: 1rem;
@@ -320,7 +309,6 @@ if (isset($_GET['logout'])) {
             padding: 0 1rem;
         }
 
-        /* Form Styles */
         .form {
             display: flex;
             flex-direction: column;
@@ -340,6 +328,36 @@ if (isset($_GET['logout'])) {
             font-size: 1rem;
             z-index: 2;
             transition: color 0.3s ease;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            cursor: pointer;
+            z-index: 3;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .password-toggle:hover {
+            color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .password-toggle:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .input-group.password-field .form-input {
+            padding-right: 3rem;
         }
 
         .form-input {
@@ -371,7 +389,6 @@ if (isset($_GET['logout'])) {
             opacity: 0.8;
         }
 
-        /* Validation Styles */
         .input-group.success .form-input {
             border-color: var(--success);
         }
@@ -401,7 +418,6 @@ if (isset($_GET['logout'])) {
             color: var(--error);
         }
 
-        /* Buttons */
         .btn {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -449,7 +465,6 @@ if (isset($_GET['logout'])) {
             to { transform: rotate(360deg); }
         }
 
-        /* Links */
         .link {
             color: var(--primary);
             text-decoration: none;
@@ -473,7 +488,6 @@ if (isset($_GET['logout'])) {
             font-size: 0.9rem;
         }
 
-        /* Mode Toggle */
         .mode-toggle {
             position: fixed;
             bottom: 2rem;
@@ -496,7 +510,6 @@ if (isset($_GET['logout'])) {
             box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
         }
 
-        /* Mobile Styles */
         @media (max-width: 767px) {
             .nav-links {
                 display: none;
@@ -568,7 +581,11 @@ if (isset($_GET['logout'])) {
 
             .form-input {
                 padding: 0.9rem 0.9rem 0.9rem 2.8rem;
-                font-size: 16px;
+                font-size: 0.9rem;
+            }
+
+            .input-group.password-field .form-input {
+                padding-right: 2.8rem;
             }
 
             .btn {
@@ -576,7 +593,6 @@ if (isset($_GET['logout'])) {
             }
         }
 
-        /* Accessibility */
         @media (prefers-reduced-motion: reduce) {
             * {
                 animation-duration: 0.01ms !important;
@@ -587,7 +603,8 @@ if (isset($_GET['logout'])) {
 
         .btn:focus-visible,
         .social-btn:focus-visible,
-        .link:focus-visible {
+        .link:focus-visible,
+        .password-toggle:focus-visible {
             outline: 2px solid var(--primary);
             outline-offset: 2px;
         }
@@ -598,7 +615,6 @@ if (isset($_GET['logout'])) {
     </style>
 </head>
 <body>
-    <!-- Background Animation -->
     <div class="bg-animation">
         <div class="floating-shapes">
             <div class="shape"></div>
@@ -607,7 +623,6 @@ if (isset($_GET['logout'])) {
         </div>
     </div>
 
-    <!-- ----- NAVIGATION ----- -->
     <nav class="navbar">
         <div class="nav-content">
             <a href="index.php" class="logo">
@@ -624,7 +639,6 @@ if (isset($_GET['logout'])) {
         </div>
     </nav>
 
-    <!-- ----- LOGIN FORM ----- -->
     <div class="main-container">
         <div class="auth-wrapper">
             <div class="auth-container">
@@ -638,21 +652,23 @@ if (isset($_GET['logout'])) {
                         <div class="validation-message error show"><?php echo htmlspecialchars($error); ?></div>
                     <?php endif; ?>
 
-
                     <div class="divider">
                         <span>Continue with email</span>
                     </div>
 
                     <form class="form" id="loginForm" method="POST">
                         <div class="input-group">
-                            <input type="email" class="form-input" name="email" placeholder="Email address" required>
                             <i class="fas fa-envelope"></i>
+                            <input type="email" class="form-input" name="email" placeholder="Email address" required>
                             <div class="validation-message"></div>
                         </div>
 
-                        <div class="input-group">
-                            <input type="password" class="form-input" name="password" placeholder="Password" required>
+                        <div class="input-group password-field">
                             <i class="fas fa-lock"></i>
+                            <input type="password" class="form-input" name="password" id="passwordInput" placeholder="Password" required>
+                            <button type="button" class="password-toggle" data-target="passwordInput" title="Show password">
+                                <i class="fas fa-eye"></i>
+                            </button>
                             <div class="validation-message"></div>
                         </div>
 
@@ -675,27 +691,23 @@ if (isset($_GET['logout'])) {
         </div>
     </div>
 
-    <!-- Mode Toggle Button -->
     <button class="mode-toggle" id="modeToggle" title="Toggle theme">
         <i class="fas fa-palette"></i>
     </button>
 
-    <!-- ----- JAVASCRIPT ----- -->
     <script>
-        // App State
         const app = {
             isLoading: false
         };
 
-        // DOM Elements
         const elements = {
             loginForm: document.getElementById('loginForm'),
             mobileMenuBtn: document.getElementById('mobileMenuBtn'),
             navLinks: document.getElementById('navLinks'),
-            modeToggle: document.getElementById('modeToggle')
+            modeToggle: document.getElementById('modeToggle'),
+            passwordToggles: document.querySelectorAll('.password-toggle')
         };
 
-        // Utility Functions
         const utils = {
             validateEmail: (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
             
@@ -725,9 +737,7 @@ if (isset($_GET['logout'])) {
             }
         };
 
-        // Form Validation
         function setupFormValidation() {
-            // Email validation
             document.querySelectorAll('input[type="email"]').forEach(input => {
                 const inputGroup = input.parentElement;
                 
@@ -745,7 +755,26 @@ if (isset($_GET['logout'])) {
             });
         }
 
-        // Mobile Menu
+        function setupPasswordToggle() {
+            elements.passwordToggles.forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    const targetId = toggle.dataset.target;
+                    const input = document.getElementById(targetId);
+                    const icon = toggle.querySelector('i');
+                    
+                    if (input.type === 'password') {
+                        input.type = 'text';
+                        icon.className = 'fas fa-eye-slash';
+                        toggle.title = 'Hide password';
+                    } else {
+                        input.type = 'password';
+                        icon.className = 'fas fa-eye';
+                        toggle.title = 'Show password';
+                    }
+                });
+            });
+        }
+
         function setupMobileMenu() {
             elements.mobileMenuBtn.addEventListener('click', () => {
                 elements.navLinks.classList.toggle('active');
@@ -763,7 +792,6 @@ if (isset($_GET['logout'])) {
             });
         }
 
-        // Theme Toggle
         function setupThemeToggle() {
             let themeIndex = 0;
             const themes = [
@@ -805,7 +833,6 @@ if (isset($_GET['logout'])) {
             });
         }
 
-        // Notifications
         function showNotification(message, type = 'info') {
             document.querySelectorAll('.notification').forEach(n => n.remove());
 
@@ -878,9 +905,9 @@ if (isset($_GET['logout'])) {
             }
         }
 
-        // Initialize App
         function initApp() {
             setupFormValidation();
+            setupPasswordToggle();
             setupMobileMenu();
             setupThemeToggle();
             
@@ -891,7 +918,3 @@ if (isset($_GET['logout'])) {
     </script>
 </body>
 </html>
-<?php
-// ----- CLEANUP -----
-$conn->close();
-?>

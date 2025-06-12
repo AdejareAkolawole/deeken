@@ -3,13 +3,14 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 10, 2025 at 11:21 PM
+-- Generation Time: Jun 12, 2025 at 08:42 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
+
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -19,8 +20,6 @@ SET time_zone = "+00:00";
 --
 -- Database: `deeken_db`
 --
-CREATE DATABASE IF NOT EXISTS `deeken_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `deeken_db`;
 
 -- --------------------------------------------------------
 
@@ -42,6 +41,25 @@ CREATE TABLE `addresses` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `addresses`
+--
+
+INSERT INTO `addresses` (`id`, `user_id`, `full_name`, `street_address`, `city`, `state`, `country`, `postal_code`, `phone`, `is_default`, `created_at`, `updated_at`) VALUES
+(1, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 15:14:37', '2025-06-12 15:14:37'),
+(2, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 15:25:14', '2025-06-12 15:25:14'),
+(3, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 15:31:26', '2025-06-12 15:31:26'),
+(4, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 15:31:59', '2025-06-12 15:31:59'),
+(5, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 15:33:01', '2025-06-12 15:33:01'),
+(6, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 16:07:42', '2025-06-12 16:07:42'),
+(7, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 17:13:03', '2025-06-12 17:13:03'),
+(8, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 17:13:55', '2025-06-12 17:13:55'),
+(9, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 17:54:57', '2025-06-12 17:54:57'),
+(10, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 17:55:46', '2025-06-12 17:55:46'),
+(11, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 18:01:34', '2025-06-12 18:01:34'),
+(12, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 18:17:02', '2025-06-12 18:17:02'),
+(13, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 18:32:45', '2025-06-12 18:32:45');
 
 -- --------------------------------------------------------
 
@@ -72,6 +90,14 @@ CREATE TABLE `categories` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Dumping data for table `categories`
+--
+
+INSERT INTO `categories` (`id`, `name`, `description`, `created_at`, `updated_at`) VALUES
+(1, 'All Category', 'Default category for all products', '2025-06-11 22:16:24', '2025-06-11 22:16:24'),
+(2, 'appliances', 'your day to day appliances', '2025-06-12 14:47:21', '2025-06-12 14:47:21');
+
 -- --------------------------------------------------------
 
 --
@@ -85,6 +111,35 @@ CREATE TABLE `inventory` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `inventory`
+--
+
+INSERT INTO `inventory` (`id`, `product_id`, `stock_quantity`, `created_at`, `updated_at`) VALUES
+(1, 1, 1, '2025-06-12 14:48:39', '2025-06-12 14:48:39'),
+(2, 2, 2, '2025-06-12 16:07:08', '2025-06-12 16:07:08');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `miscellaneous_attributes`
+--
+
+CREATE TABLE `miscellaneous_attributes` (
+  `id` int(11) UNSIGNED NOT NULL,
+  `product_id` int(11) UNSIGNED NOT NULL,
+  `attribute` enum('new_arrival','featured','trending') NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `miscellaneous_attributes`
+--
+
+INSERT INTO `miscellaneous_attributes` (`id`, `product_id`, `attribute`, `created_at`, `updated_at`) VALUES
+(1, 1, 'new_arrival', '2025-06-12 14:48:39', '2025-06-12 14:48:39');
 
 -- --------------------------------------------------------
 
@@ -104,6 +159,25 @@ CREATE TABLE `orders` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Dumping data for table `orders`
+--
+
+INSERT INTO `orders` (`id`, `user_id`, `address_id`, `payment_id`, `total`, `delivery_fee`, `status`, `created_at`, `updated_at`) VALUES
+(2, 1, 1, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 15:14:37', '2025-06-12 16:11:06'),
+(3, 1, 2, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 15:25:14', '2025-06-12 16:11:54'),
+(4, 1, 3, NULL, 5.00, 5.00, 'cancelled', '2025-06-12 15:31:26', '2025-06-12 16:11:11'),
+(5, 1, 4, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 15:31:59', '2025-06-12 16:10:58'),
+(6, 1, 5, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 15:33:01', '2025-06-12 16:10:50'),
+(7, 1, 6, NULL, 8.00, 5.00, 'cancelled', '2025-06-12 16:07:42', '2025-06-12 16:10:44'),
+(8, 1, 7, NULL, 7.00, 5.00, 'pending', '2025-06-12 17:13:03', '2025-06-12 17:13:03'),
+(9, 1, 8, NULL, 7.00, 5.00, 'pending', '2025-06-12 17:13:56', '2025-06-12 17:13:56'),
+(10, 1, 9, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 17:54:57', '2025-06-12 17:55:24'),
+(11, 1, 10, NULL, 7.00, 5.00, 'pending', '2025-06-12 17:55:46', '2025-06-12 17:55:46'),
+(12, 1, 11, NULL, 8.00, 5.00, 'pending', '2025-06-12 18:01:34', '2025-06-12 18:01:34'),
+(13, 1, 12, NULL, 7.00, 5.00, 'pending', '2025-06-12 18:17:02', '2025-06-12 18:17:02'),
+(14, 1, 13, NULL, 7.00, 5.00, 'pending', '2025-06-12 18:32:45', '2025-06-12 18:32:45');
+
 -- --------------------------------------------------------
 
 --
@@ -118,6 +192,24 @@ CREATE TABLE `order_items` (
   `price` decimal(10,2) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `order_items`
+--
+
+INSERT INTO `order_items` (`id`, `order_id`, `product_id`, `quantity`, `price`, `created_at`) VALUES
+(1, 2, 1, 1, 2.00, '2025-06-12 15:14:37'),
+(2, 3, 1, 1, 2.00, '2025-06-12 15:25:14'),
+(3, 5, 1, 1, 2.00, '2025-06-12 15:31:59'),
+(4, 6, 1, 1, 2.00, '2025-06-12 15:33:01'),
+(5, 7, 2, 1, 3.00, '2025-06-12 16:07:42'),
+(6, 8, 1, 1, 2.00, '2025-06-12 17:13:03'),
+(7, 9, 1, 1, 2.00, '2025-06-12 17:13:56'),
+(8, 10, 1, 1, 2.00, '2025-06-12 17:54:57'),
+(9, 11, 1, 1, 2.00, '2025-06-12 17:55:46'),
+(10, 12, 2, 1, 3.00, '2025-06-12 18:01:34'),
+(11, 13, 1, 1, 2.00, '2025-06-12 18:17:02'),
+(12, 14, 1, 1, 2.00, '2025-06-12 18:32:45');
 
 -- --------------------------------------------------------
 
@@ -166,9 +258,16 @@ CREATE TABLE `products` (
   `rating` decimal(3,1) DEFAULT 0.0,
   `featured` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `category` varchar(255) NOT NULL DEFAULT 'general'
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `products`
+--
+
+INSERT INTO `products` (`id`, `category_id`, `name`, `sku`, `price`, `image`, `description`, `rating`, `featured`, `created_at`, `updated_at`) VALUES
+(1, 2, 'screw driver', 'PROD37405', 2.00, 'Uploads/screw.jpg', 'Description for screw driver', 0.0, 0, '2025-06-12 14:48:39', '2025-06-12 14:48:39'),
+(2, 2, 'screw driver ++', 'PROD20771', 3.00, 'Uploads/screw.jpg', 'Description for screw driver ++', 0.0, 0, '2025-06-12 16:07:08', '2025-06-12 16:07:08');
 
 -- --------------------------------------------------------
 
@@ -207,6 +306,13 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
+-- Dumping data for table `users`
+--
+
+INSERT INTO `users` (`id`, `email`, `password`, `full_name`, `profile_picture`, `address`, `phone`, `is_admin`, `created_at`, `updated_at`) VALUES
+(1, 'admin@deeken.com', '$2y$10$MmJc/dCV8UgXgsB5YCIppuMseCZkbCBuW.uDaI5BdG5ooJJr8DYDe', 'Idris Ahmad Rabiu', NULL, 'Admin Address', '1234567890', 1, '2025-06-10 22:43:23', '2025-06-12 15:14:37');
+
+--
 -- Indexes for dumped tables
 --
 
@@ -238,6 +344,13 @@ ALTER TABLE `categories`
 ALTER TABLE `inventory`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `product_id` (`product_id`);
+
+--
+-- Indexes for table `miscellaneous_attributes`
+--
+ALTER TABLE `miscellaneous_attributes`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `product_attribute` (`product_id`,`attribute`);
 
 --
 -- Indexes for table `orders`
@@ -301,37 +414,43 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `addresses`
 --
 ALTER TABLE `addresses`
-  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `cart`
 --
 ALTER TABLE `cart`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `categories`
 --
 ALTER TABLE `categories`
-  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `inventory`
 --
 ALTER TABLE `inventory`
-  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- AUTO_INCREMENT for table `miscellaneous_attributes`
+--
+ALTER TABLE `miscellaneous_attributes`
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `order_items`
 --
 ALTER TABLE `order_items`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `password_resets`
@@ -349,7 +468,7 @@ ALTER TABLE `payments`
 -- AUTO_INCREMENT for table `products`
 --
 ALTER TABLE `products`
-  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `reviews`
@@ -361,7 +480,7 @@ ALTER TABLE `reviews`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- Constraints for dumped tables
@@ -385,6 +504,12 @@ ALTER TABLE `cart`
 --
 ALTER TABLE `inventory`
   ADD CONSTRAINT `inventory_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `miscellaneous_attributes`
+--
+ALTER TABLE `miscellaneous_attributes`
+  ADD CONSTRAINT `miscellaneous_attributes_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `orders`
@@ -419,7 +544,6 @@ ALTER TABLE `products`
 ALTER TABLE `reviews`
   ADD CONSTRAINT `reviews_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `reviews_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
-
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

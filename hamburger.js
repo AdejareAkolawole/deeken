@@ -138,27 +138,49 @@ document.addEventListener('click', (e) => {
         }
     }
 });
-// responsive.js
-
-// ----- NAVBAR SCROLL BEHAVIOR -----
+// Handle navbar scroll behavior
 let lastScrollTop = 0;
+const navbar = document.querySelector('.navbar');
 
 window.addEventListener('scroll', function() {
-    const navbar = document.querySelector('.navbar');
-    if (!navbar) {
-        console.error('Navbar not found');
-        return; // Safety check
-    }
-
-    const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
-
-    if (currentScrollTop > lastScrollTop && currentScrollTop > 50) {
-        // Scrolling down and past 50px
+    let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+    
+    if (currentScroll > lastScrollTop && currentScroll > 100) {
+        // Scrolling down & past 100px
         navbar.classList.add('hidden');
-    } else {
-        // Scrolling up or near top
+    } else if (currentScroll <= 100) {
+        // At or near top
         navbar.classList.remove('hidden');
     }
+    
+    lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+});
 
-    lastScrollTop = currentScrollTop <= 0 ? 0 : currentScrollTop; // Prevent negative scroll
+// Toggle category dropdown
+function toggleCategoryDropdown() {
+    const categoryToggle = document.getElementById('categoryToggle');
+    const categoryList = document.getElementById('categoryList');
+    
+    if (categoryToggle && categoryList) {
+        categoryToggle.classList.toggle('active');
+        categoryList.classList.toggle('show');
+    }
+}
+
+// Event listener for category toggle
+document.addEventListener('DOMContentLoaded', function() {
+    const categoryToggle = document.getElementById('categoryToggle');
+    if (categoryToggle) {
+        categoryToggle.addEventListener('click', toggleCategoryDropdown);
+    }
+
+    // Close category dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        const categoryDropdown = document.querySelector('.category-dropdown');
+        const categoryList = document.getElementById('categoryList');
+        if (categoryDropdown && categoryList && !categoryDropdown.contains(event.target)) {
+            categoryToggle.classList.remove('active');
+            categoryList.classList.remove('show');
+        }
+    });
 });

@@ -76,7 +76,7 @@ img {
     grid-template-columns: 1fr;
     padding: 1rem;
     gap: 1rem;
-    background: linear-gradient(135deg, #F6F6F6, #BDF3FF);
+ 
   }
   .product-card {
     padding: 1rem;
@@ -395,4 +395,25 @@ img {
 .spacing-responsive {
   padding: clamp(1rem, 4vw, 2rem);
   margin: clamp(0.5rem, 2vw, 1rem) auto;
+}
+/* Remove rounded edges for navbar in responsive views */
+@media (max-width: 768px) {
+    .navbar {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .navbar {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+}
+
+@media (max-width: 360px) {
+    .navbar {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+    }
 }

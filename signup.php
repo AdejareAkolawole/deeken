@@ -385,6 +385,33 @@ if (isset($_POST['signup'])) {
             transition: color 0.3s ease;
         }
 
+        /* Password Toggle Button */
+        .password-toggle {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            cursor: pointer;
+            z-index: 3;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .password-toggle:hover {
+            color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .password-toggle:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
         .form-input {
             width: 100%;
             padding: 1rem 1rem 1rem 3rem;
@@ -396,6 +423,11 @@ if (isset($_POST['signup'])) {
             color: var(--text-primary);
             transition: all 0.3s ease;
             backdrop-filter: blur(10px);
+        }
+
+        /* Adjust padding for password inputs with toggle button */
+        .input-group.password-field .form-input {
+            padding-right: 3rem;
         }
 
         .form-input:focus {
@@ -698,6 +730,10 @@ if (isset($_POST['signup'])) {
                 font-size: 16px;
             }
 
+            .input-group.password-field .form-input {
+                padding-right: 2.8rem;
+            }
+
             .btn {
                 padding: 0.9rem 1.5rem;
             }
@@ -767,7 +803,6 @@ if (isset($_POST['signup'])) {
                         <div class="validation-message error show"><?php echo htmlspecialchars($error); ?></div>
                     <?php endif; ?>
 
-                  
                     <div class="divider">
                         <span>Sign up with email</span>
                     </div>
@@ -792,9 +827,12 @@ if (isset($_POST['signup'])) {
                             <div class="validation-message"></div>
                         </div>
 
-                        <div class="input-group">
+                        <div class="input-group password-field">
                             <input type="password" class="form-input" name="password" placeholder="Password" required>
                             <i class="fas fa-lock"></i>
+                            <button type="button" class="password-toggle" data-target="password">
+                                <i class="fas fa-eye"></i>
+                            </button>
                             <div class="validation-message"></div>
                             <div class="password-strength">
                                 <div class="strength-bar">
@@ -804,9 +842,12 @@ if (isset($_POST['signup'])) {
                             </div>
                         </div>
 
-                        <div class="input-group">
+                        <div class="input-group password-field">
                             <input type="password" class="form-input" name="confirm_password" placeholder="Confirm password" required>
                             <i class="fas fa-lock"></i>
+                            <button type="button" class="password-toggle" data-target="confirm_password">
+                                <i class="fas fa-eye"></i>
+                            </button>
                             <div class="validation-message"></div>
                         </div>
 
@@ -877,7 +918,8 @@ if (isset($_POST['signup'])) {
             navLinks: document.getElementById('navLinks'),
             modeToggle: document.getElementById('modeToggle'),
             termsCheckbox: document.getElementById('termsCheckbox'),
-            marketingCheckbox: document.getElementById('marketingCheckbox')
+            marketingCheckbox: document.getElementById('marketingCheckbox'),
+            passwordToggles: document.querySelectorAll('.password-toggle')
         };
 
         // Utility Functions
@@ -901,14 +943,14 @@ if (isset($_POST['signup'])) {
             
             showValidation: (inputGroup, type, message) => {
                 const validationMsg = inputGroup.querySelector('.validation-message');
-                inputGroup.className = `input-group ${type}`;
+                inputGroup.className = inputGroup.className.replace(/\b(?:success|error)\b/g, '').trim() + ` ${type}`;
                 validationMsg.textContent = message;
                 validationMsg.className = `validation-message ${type} show`;
             },
 
             hideValidation: (inputGroup) => {
                 const validationMsg = inputGroup.querySelector('.validation-message');
-                inputGroup.className = 'input-group';
+                inputGroup.className = inputGroup.className.replace(/\b(?:success|error)\b/g, '').trim();
                 validationMsg.className = 'validation-message';
             },
 
@@ -919,286 +961,240 @@ if (isset($_POST['signup'])) {
                         clearTimeout(timeout);
                         func(...args);
                     };
-                    clearTimeout(timeout);
-                    timeout = setTimeout(later, wait);
+                                        timeout = setTimeout(later, wait);
                 };
             }
         };
 
         // Form Validation
-        function setupFormValidation() {
-            // Name validation
-            document.querySelectorAll('input[type="text"]').forEach(input => {
-                const inputGroup = input.parentElement;
-                
-                input.addEventListener('blur', () => {
-                    if (input.value) {
-                        if (utils.validateName(input.value)) {
+        const formValidation = {
+            init: () => {
+                elements.signupForm.addEventListener('submit', formValidation.handleSubmit);
+                elements.signupForm.querySelectorAll('.form-input').forEach(input => {
+                    input.addEventListener('input', utils.debounce(formValidation.validateInput, 300));
+                });
+            },
+
+            validateInput: (e) => {
+                const input = e.target;
+                const inputGroup = input.closest('.input-group');
+                const value = input.value.trim();
+                const name = input.name;
+
+                switch (name) {
+                    case 'first_name':
+                    case 'last_name':
+                        if (utils.validateName(value)) {
                             utils.showValidation(inputGroup, 'success', 'Looks good!');
                         } else {
                             utils.showValidation(inputGroup, 'error', 'Name must be at least 2 characters');
                         }
-                    } else {
-                        utils.hideValidation(inputGroup);
-                    }
-                });
-            });
+                        break;
 
-            // Email validation
-            document.querySelectorAll('input[type="email"]').forEach(input => {
-                const inputGroup = input.parentElement;
-                
-                input.addEventListener('blur', () => {
-                    if (input.value) {
-                        if (utils.validateEmail(input.value)) {
-                            utils.showValidation(inputGroup, 'success', 'Valid email address');
+                    case 'email':
+                        if (utils.validateEmail(value)) {
+                            utils.showValidation(inputGroup, 'success', 'Valid email');
                         } else {
-                            utils.showValidation(inputGroup, 'error', 'Please enter a valid email address');
+                            utils.showValidation(inputGroup, 'error', 'Invalid email address');
                         }
-                    } else {
-                        utils.hideValidation(inputGroup);
-                    }
-                });
-            });
+                        break;
 
-            // Password validation
-            const passwordInputs = document.querySelectorAll('input[type="password"]');
-            const passwordInput = passwordInputs[0];
-            const confirmPasswordInput = passwordInputs[1];
-            
-            passwordInput.addEventListener('input', utils.debounce(() => {
-                updatePasswordStrength(passwordInput.value);
-            }, 300));
+                    case 'password':
+                        const { score, checks } = utils.validatePassword(value);
+                        formValidation.updatePasswordStrength(inputGroup, score, checks);
+                        break;
 
-            passwordInput.addEventListener('blur', () => {
-                const { score } = utils.validatePassword(passwordInput.value);
-                const inputGroup = passwordInput.parentElement;
-                
-                if (passwordInput.value) {
-                    if (score >= 3) {
-                        utils.showValidation(inputGroup, 'success', 'Strong password');
-                    } else if (score >= 2) {
-                        utils.showValidation(inputGroup, 'error', 'Password could be stronger');
-                    } else {
-                        utils.showValidation(inputGroup, 'error', 'Password is too weak');
-                    }
+                    case 'confirm_password':
+                        const password = elements.signupForm.querySelector('[name="password"]').value;
+                        if (value === password && value.length > 0) {
+                            utils.showValidation(inputGroup, 'success', 'Passwords match');
+                        } else {
+                            utils.showValidation(inputGroup, 'error', 'Passwords do not match');
+                        }
+                        break;
+
+                    case 'address':
+                        if (value.length >= 5) {
+                            utils.showValidation(inputGroup, 'success', 'Valid address');
+                        } else {
+                            utils.showValidation(inputGroup, 'error', 'Address too short');
+                        }
+                        break;
+
+                    case 'phone':
+                        if (/^\+?\d{10,}$/.test(value.replace(/\s/g, ''))) {
+                            utils.showValidation(inputGroup, 'success', 'Valid phone number');
+                        } else {
+                            utils.showValidation(inputGroup, 'error', 'Invalid phone number');
+                        }
+                        break;
                 }
-            });
+            },
 
-            // Confirm password validation
-            confirmPasswordInput.addEventListener('blur', () => {
-                const inputGroup = confirmPasswordInput.parentElement;
-                
-                if (confirmPasswordInput.value) {
-                    if (confirmPasswordInput.value === passwordInput.value) {
-                        utils.showValidation(inputGroup, 'success', 'Passwords match');
-                    } else {
-                        utils.showValidation(inputGroup, 'error', 'Passwords do not match');
-                    }
+            updatePasswordStrength: (inputGroup, score, checks) => {
+                const strengthBar = inputGroup.querySelector('.strength-fill');
+                const strengthText = inputGroup.querySelector('.strength-text span');
+                const passwordStrength = inputGroup.querySelector('.password-strength');
+
+                app.passwordStrength = score;
+                const percentage = (score / 5) * 100;
+                let strengthLabel = '';
+
+                switch (score) {
+                    case 5: strengthLabel = 'Very Strong'; break;
+                    case 4: strengthLabel = 'Strong'; break;
+                    case 3: strengthLabel = 'Moderate'; break;
+                    case 2: strengthLabel = 'Weak'; break;
+                    default: strengthLabel = 'Very Weak';
+                }
+
+                strengthBar.style.width = `${percentage}%`;
+                strengthBar.style.background = score >= 4 ? 'var(--success)' : score >= 3 ? 'var(--warning)' : 'var(--error)';
+                strengthText.textContent = strengthLabel;
+                passwordStrength.classList.add('show');
+
+                if (score >= 3) {
+                    utils.showValidation(inputGroup, 'success', 'Password strength: ' + strengthLabel);
                 } else {
-                    utils.hideValidation(inputGroup);
+                    utils.showValidation(inputGroup, 'error', 'Password too weak');
                 }
-            });
-        }
+            },
 
-        // Password Strength Indicator
-        function updatePasswordStrength(password) {
-            const strengthIndicator = document.querySelector('.password-strength');
-            const strengthFill = document.querySelector('.strength-fill');
-            const strengthText = document.querySelector('.strength-text span');
-            
-            if (password.length === 0) {
-                strengthIndicator.classList.remove('show');
-                return;
+            handleSubmit: (e) => {
+                if (!app.formData.termsAccepted) {
+                    e.preventDefault();
+                    const termsGroup = elements.termsCheckbox.closest('.checkbox-group');
+                    const validationMsg = document.createElement('div');
+                    validationMsg.className = 'validation-message error show';
+                    validationMsg.textContent = 'You must accept the Terms of Service';
+                    termsGroup.appendChild(validationMsg);
+                    setTimeout(() => validationMsg.remove(), 3000);
+                }
             }
-            
-            strengthIndicator.classList.add('show');
-            
-            const { score } = utils.validatePassword(password);
-            const percentage = (score / 5) * 100;
-            
-            strengthFill.style.width = `${percentage}%`;
-            
-            if (score <= 1) {
-                strengthFill.style.background = '#ef4444';
-                strengthText.textContent = 'Weak';
-            } else if (score <= 2) {
-                strengthFill.style.background = '#f59e0b';
-                strengthText.textContent = 'Fair';
-            } else if (score <= 3) {
-                strengthFill.style.background = '#06b6d4';
-                strengthText.textContent = 'Good';
-            } else {
-                strengthFill.style.background = '#10b981';
-                strengthText.textContent = 'Strong';
-            }
-        }
+        };
 
-        // Checkbox Functionality
-        function setupCheckboxes() {
-            [elements.termsCheckbox, elements.marketingCheckbox].forEach(checkbox => {
-                checkbox.addEventListener('click', function() {
-                    this.classList.toggle('checked');
-                    const input = this.parentElement.querySelector('input[type="checkbox"]');
-                    input.checked = this.classList.contains('checked');
-                    
-                    if (this.id === 'termsCheckbox') {
-                        app.formData.termsAccepted = this.classList.contains('checked');
-                    } else if (this.id === 'marketingCheckbox') {
-                        app.formData.marketingOptIn = this.classList.contains('checked');
-                    }
+        // Password Toggle
+        const passwordToggle = {
+            init: () => {
+                elements.passwordToggles.forEach(toggle => {
+                    toggle.addEventListener('click', () => {
+                        const targetId = toggle.dataset.target;
+                        const input = elements.signupForm.querySelector(`[name="${targetId}"]`);
+                        const icon = toggle.querySelector('i');
+                        
+                        if (input.type === 'password') {
+                            input.type = 'text';
+                            icon.className = 'fas fa-eye-slash';
+                        } else {
+                            input.type = 'password';
+                            icon.className = 'fas fa-eye';
+                        }
+                    });
                 });
-            });
-        }
+            }
+        };
+
+        // Checkbox Handling
+        const checkboxHandler = {
+            init: () => {
+                [elements.termsCheckbox, elements.marketingCheckbox].forEach(checkbox => {
+                    checkbox.addEventListener('click', () => {
+                        const hiddenInput = checkbox.nextElementSibling.querySelector('input');
+                        const isChecked = !checkbox.classList.contains('checked');
+                        
+                        checkbox.classList.toggle('checked');
+                        hiddenInput.checked = isChecked;
+
+                        if (checkbox.id === 'termsCheckbox') {
+                            app.formData.termsAccepted = isChecked;
+                        } else {
+                            app.formData.marketingOptIn = isChecked;
+                        }
+                    });
+                });
+            }
+        };
 
         // Mobile Menu
-        function setupMobileMenu() {
-            elements.mobileMenuBtn.addEventListener('click', () => {
-                elements.navLinks.classList.toggle('active');
-                const icon = elements.mobileMenuBtn.querySelector('i');
-                icon.className = elements.navLinks.classList.contains('active') 
-                    ? 'fas fa-times' 
-                    : 'fas fa-bars';
-            });
-
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('.navbar')) {
-                    elements.navLinks.classList.remove('active');
-                    elements.mobileMenuBtn.querySelector('i').className = 'fas fa-bars';
-                }
-            });
-        }
+        const mobileMenu = {
+            init: () => {
+                elements.mobileMenuBtn.addEventListener('click', () => {
+                    elements.navLinks.classList.toggle('active');
+                    const icon = elements.mobileMenuBtn.querySelector('i');
+                    icon.className = elements.navLinks.classList.contains('active') ? 'fas fa-times' : 'fas fa-bars';
+                });
+            }
+        };
 
         // Theme Toggle
-        function setupThemeToggle() {
-            let themeIndex = 0;
-            const themes = [
-                {
-                    name: 'Dark Blue',
-                    primary: '#6366f1',
-                    secondary: '#06b6d4',
-                    background: '#0f172a'
-                },
-                {
-                    name: 'Purple',
-                    primary: '#8b5cf6',
-                    secondary: '#ec4899',
-                    background: '#1e1b4b'
-                },
-                {
-                    name: 'Green',
-                    primary: '#10b981',
-                    secondary: '#06b6d4',
-                    background: '#064e3b'
-                },
-                {
-                    name: 'Orange',
-                    primary: '#f59e0b',
-                    secondary: '#ef4444',
-                    background: '#7c2d12'
+        const themeToggle = {
+            init: () => {
+                elements.modeToggle.addEventListener('click', () => {
+                    document.body.classList.toggle('light-mode');
+                    localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
+                    
+                    const icon = elements.modeToggle.querySelector('i');
+                    icon.className = document.body.classList.contains('light-mode') ? 'fas fa-moon' : 'fas fa-palette';
+                });
+
+                // Load saved theme
+                if (localStorage.getItem('theme') === 'light') {
+                    document.body.classList.add('light-mode');
+                    elements.modeToggle.querySelector('i').className = 'fas fa-moon';
                 }
-            ];
-
-            elements.modeToggle.addEventListener('click', () => {
-                themeIndex = (themeIndex + 1) % themes.length;
-                const theme = themes[themeIndex];
-                
-                document.documentElement.style.setProperty('--primary', theme.primary);
-                document.documentElement.style.setProperty('--secondary', theme.secondary);
-                document.documentElement.style.setProperty('--background', theme.background);
-                
-                showNotification(`Switched to ${theme.name} theme`, 'info');
-            });
-        }
-
-        // Notifications
-        function showNotification(message, type = 'info') {
-            document.querySelectorAll('.notification').forEach(n => n.remove());
-
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.innerHTML = `
-                <div class="notification-content">
-                    <i class="fas ${getNotificationIcon(type)}"></i>
-                    <span>${message}</span>
-                    <button class="notification-close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `;
-
-            Object.assign(notification.style, {
-                position: 'fixed',
-                top: '2rem',
-                right: '2rem',
-                background: type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#6366f1',
-                color: 'white',
-                padding: '1rem 1.5rem',
-                borderRadius: '12px',
-                boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
-                zIndex: '10000',
-                transform: 'translateX(100%)',
-                transition: 'transform 0.3s ease',
-                maxWidth: '300px',
-                wordWrap: 'break-word'
-            });
-
-            notification.querySelector('.notification-content').style.cssText = `
-                display: flex;
-                align-items: center;
-                gap: 0.75rem;
-            `;
-
-            notification.querySelector('.notification-close').style.cssText = `
-                background: none;
-                border: none;
-                color: white;
-                cursor: pointer;
-                padding: 0.25rem;
-                margin-left: auto;
-            `;
-
-            document.body.appendChild(notification);
-
-            requestAnimationFrame(() => {
-                notification.style.transform = 'translateX(0)';
-            });
-
-            setTimeout(() => {
-                notification.style.transform = 'translateX(100%)';
-                setTimeout(() => notification.remove(), 300);
-            }, 4000);
-
-            notification.querySelector('.notification-close').addEventListener('click', () => {
-                notification.style.transform = 'translateX(100%)';
-                setTimeout(() => notification.remove(), 300);
-            });
-        }
-
-        function getNotificationIcon(type) {
-            switch (type) {
-                case 'success': return 'fa-check-circle';
-                case 'error': return 'fa-exclamation-circle';
-                case 'warning': return 'fa-exclamation-triangle';
-                default: return 'fa-info-circle';
             }
-        }
+        };
 
-        // Initialize App
-        function initApp() {
-            setupFormValidation();
-            setupCheckboxes();
-            setupMobileMenu();
-            setupThemeToggle();
-            
-            document.body.classList.add('loaded');
-        }
+        // Light Theme Styles
+        const lightThemeStyles = `
+            body.light-mode {
+                --background: #f8fafc;
+                --surface: rgba(255, 255, 255, 0.9);
+                --text-primary: #1f2937;
+                --text-secondary: #4b5563;
+                --border: rgba(0, 0, 0, 0.1);
+                background: linear-gradient(135deg, #e0e7ff, #f0f9ff);
+            }
 
-        document.addEventListener('DOMContentLoaded', initApp);
+            body.light-mode .navbar {
+                background: rgba(255, 255, 255, 0.95);
+                border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            }
+
+            body.light-mode .form-input {
+                background: rgba(255, 255, 255, 0.8);
+                color: #1f2937;
+            }
+
+            body.light-mode .form-input::placeholder {
+                color: #6b7280;
+            }
+        `;
+
+        // Initialize
+        const init = () => {
+            // Add light theme styles
+            const style = document.createElement('style');
+            style.textContent = lightThemeStyles;
+            document.head.appendChild(style);
+
+            formValidation.init();
+            passwordToggle.init();
+            checkboxHandler.init();
+            mobileMenu.init();
+            themeToggle.init();
+
+            // Close mobile menu when clicking a link
+            elements.navLinks.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', () => {
+                    elements.navLinks.classList.remove('active');
+                    elements.mobileMenuBtn.querySelector('i').className = 'fas fa-bars';
+                });
+            });
+        };
+
+        // Run initialization
+        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
-<?php
-// ----- CLEANUP -----
-$conn->close();
-?>

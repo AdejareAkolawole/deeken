@@ -56,6 +56,7 @@ function displayStars($rating) {
     <title>Deeken - <?php echo htmlspecialchars($product['name'] ?? 'Product'); ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="radial.css">
     <link rel="stylesheet" href="global.css">
     <link rel="stylesheet" href="product.css">
     <link rel="stylesheet" href="responsive.css">
@@ -317,6 +318,10 @@ function displayStars($rating) {
     top: 0;
     z-index: 1000;
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.navbar.hidden {
+    transform: translateY(-100%);
 }
 
 .logo {
@@ -608,11 +613,9 @@ function displayStars($rating) {
                 
                 <div class="profile-dropdown-menu" id="profileDropdown">
                     <?php if ($user): ?>
-
                         <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
                         <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
                         <a href="index.php"><i class="fas fa-heart"></i> Home</a>
-                        <a href="settings.php"><i class="fas fa-cog"></i> Settings</a>
                         <hr class="dropdown-divider">
                         <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
                     <?php else: ?>
@@ -624,10 +627,7 @@ function displayStars($rating) {
                 </div>
             </div>
         </div>
-      
     </nav>
-    
- 
 
     <!-- ----- MAIN CONTENT WRAPPER ----- -->
     <main>
@@ -655,7 +655,7 @@ function displayStars($rating) {
                         <h2><i class="fas fa-star"></i> Reviews</h2>
                         <div id="reviewList">
                             <?php
-                            $stmt = $conn->prepare("SELECT r.*, u.email FROM reviews r JOIN users u ON r.user_id = u.id WHERE r.product_id = ?");
+                            $stmt = $conn->prepare("SELECT r.*, u.full_name, u.email FROM reviews r JOIN users u ON r.user_id = u.id WHERE r.product_id = ?");
                             $stmt->bind_param("i", $product_id);
                             $stmt->execute();
                             $reviews = $stmt->get_result();
@@ -663,7 +663,7 @@ function displayStars($rating) {
                                 while ($review = $reviews->fetch_assoc()):
                             ?>
                                 <div class="review">
-                                    <p><strong><?php echo htmlspecialchars($review['email']); ?></strong></p>
+                                    <p><strong><?php echo htmlspecialchars($review['full_name'] ?? $review['email']); ?></strong></p>
                                     <p><?php echo htmlspecialchars($review['review_text']); ?></p>
                                     <p><?php echo displayStars($review['rating']); ?></p>
                                 </div>
@@ -810,6 +810,29 @@ function displayStars($rating) {
             if (!profileDropdown.contains(event.target)) {
                 dropdown.classList.remove('show');
             }
+        });
+
+        // Navbar scroll behavior
+        let lastScrollTop = 0;
+        const navbar = document.querySelector('.navbar');
+
+        window.addEventListener('scroll', function() {
+            let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+            
+            if (currentScroll > lastScrollTop) {
+                // Scrolling down
+                navbar.classList.add('hidden');
+            } else {
+                // Scrolling up
+                navbar.classList.remove('hidden');
+            }
+            
+            // Show navbar when at the top of the page
+            if (currentScroll <= 0) {
+                navbar.classList.remove('hidden');
+            }
+            
+            lastScrollTop = currentScroll <= 0 ? 0 : currentScrollTop;
         });
     </script>
 </body>
