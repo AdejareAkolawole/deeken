@@ -625,40 +625,46 @@ $cart_count = getCartCount($conn, $user);
     <script src="utils.js"></script>
     <script src="hamburger.js"></script>
     <script>
-        // Toggle profile dropdown
-        function toggleProfileDropdown() {
-            const dropdown = document.getElementById('profileDropdown');
-            dropdown.classList.toggle('show');
-        }
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
-            const profileDropdown = document.querySelector('.profile-dropdown');
-            const dropdown = document.getElementById('profileDropdown');
-            if (!profileDropdown.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        // Navbar scroll behavior
-        let lastScrollTop = 0;
-        const navbar = document.querySelector('.navbar');
-
-        window.addEventListener('scroll', function() {
-            let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-            if (currentScroll > lastScrollTop) {
-                navbar.classList.add('hidden');
-            } else {
-                navbar.classList.remove('hidden');
-            }
-            if (currentScroll <= 0) {
-                navbar.classList.remove('hidden');
-            }
-            lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
-        });
-
-        // Handle checkout form submission
         document.addEventListener('DOMContentLoaded', function() {
+            // Toggle profile dropdown
+            function toggleProfileDropdown() {
+                const dropdown = document.getElementById('profileDropdown');
+                if (dropdown) {
+                    dropdown.classList.toggle('show');
+                }
+            }
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                const profileDropdown = document.querySelector('.profile-dropdown');
+                const dropdown = document.getElementById('profileDropdown');
+                if (profileDropdown && dropdown && !profileDropdown.contains(event.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+
+            // Ensure the toggle function is globally available
+            window.toggleProfileDropdown = toggleProfileDropdown;
+
+            // Navbar scroll behavior
+            let lastScrollTop = 0;
+            const navbar = document.querySelector('.navbar');
+            if (navbar) {
+                window.addEventListener('scroll', function() {
+                    let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+                    if (currentScroll > lastScrollTop) {
+                        navbar.classList.add('hidden');
+                    } else {
+                        navbar.classList.remove('hidden');
+                    }
+                    if (currentScroll <= 0) {
+                        navbar.classList.remove('hidden');
+                    }
+                    lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+                });
+            }
+
+            // Handle checkout form submission
             const form = document.getElementById('checkoutForm');
             if (form) {
                 console.log('Checkout form found, attaching event listener');

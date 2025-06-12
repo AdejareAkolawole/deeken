@@ -166,6 +166,8 @@ function canCancelOrder($status) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="responsive.css">
+   <link rel="stylesheet" href="global.css">
+   <link rel="stylesheet" href="hamburger.css">
     <style>
         * {
             margin: 0;
@@ -252,7 +254,7 @@ function canCancelOrder($status) {
             text-decoration: none;
             color: white;
             font-weight: 500;
-            padding: 8px 16px;
+            paddingeson: 8px 16px;
             border-radius: 25px;
             position: relative;
         }
@@ -878,7 +880,7 @@ function canCancelOrder($status) {
             </a>
             
             <div class="profile-dropdown">
-                <div class="profile-trigger" onclick="toggleProfileDropdown()">
+                <div class="profile-trigger">
                     <div class="profile-avatar">
                         <i class="fas fa-user"></i>
                     </div>
@@ -1079,7 +1081,7 @@ function canCancelOrder($status) {
                                 </div>
                             </div>
 
-                           
+                            <div class="order-actions">
                                 <?php if (canCancelOrder($order['status'])): ?>
                                     <form method="POST" action="" onsubmit="return confirm('Are you sure you want to cancel this order?');">
                                         <input type="hidden" name="action" value="cancel_order">
@@ -1162,20 +1164,38 @@ function canCancelOrder($status) {
             </div>
         </div>
     </footer>
-    <script src ="hamburger.js"></script>
-      <script src ="utils.js"></script>
-    <script>
-        function toggleProfileDropdown() {
-            const dropdown = document.getElementById('profileDropdown');
-            dropdown.classList.toggle('show');
-        }
 
-        document.addEventListener('click', function(event) {
+    <script src="hamburger.js"></script>
+    <script src="utils.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get elements
             const dropdown = document.getElementById('profileDropdown');
             const trigger = document.querySelector('.profile-trigger');
-            if (!trigger.contains(event.target) && !dropdown.contains(event.target)) {
-                dropdown.classList.remove('show');
+
+            // Debugging: Check if elements exist
+            if (!dropdown || !trigger) {
+                console.error('Dropdown or trigger element not found:', { dropdown, trigger });
+                return;
             }
+
+            // Toggle dropdown function
+            function toggleProfileDropdown(event) {
+                event.stopPropagation(); // Prevent click from bubbling to document
+                console.log('Toggling dropdown'); // Debug
+                dropdown.classList.toggle('show');
+            }
+
+            // Attach click handler to trigger
+            trigger.addEventListener('click', toggleProfileDropdown);
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!trigger.contains(event.target) && !dropdown.contains(event.target)) {
+                    console.log('Closing dropdown'); // Debug
+                    dropdown.classList.remove('show');
+                }
+            });
         });
 
         function searchProducts() {
@@ -1185,6 +1205,7 @@ function canCancelOrder($status) {
             }
         }
 
+        // Navbar scroll behavior
         let lastScrollTop = 0;
         const navbar = document.querySelector('.navbar');
 
@@ -1199,7 +1220,7 @@ function canCancelOrder($status) {
                 navbar.classList.remove('hidden');
             }
             
-            // Show navbar when at the top of the page
+            // Show navbar when at the top
             if (currentScroll <= 0) {
                 navbar.classList.remove('hidden');
             }
