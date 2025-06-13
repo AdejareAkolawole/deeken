@@ -11,50 +11,101 @@ requireLogin();
 
 $user = getCurrentUser();
 
+// ----- HELPER FUNCTIONS FOR DELIVERY FEES -----
+function getDeliveryFees($conn, $total_amount) {
+    $stmt = $conn->prepare("SELECT id, name, fee, min_order_amount, description FROM delivery_fees WHERE is_active = 1 ORDER BY fee ASC");
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $fees = [];
+    while ($row = $result->fetch_assoc()) {
+        $row['is_applicable'] = ($row['min_order_amount'] === null || $total_amount >= $row['min_order_amount']);
+        $fees[] = $row;
+    }
+    $stmt->close();
+    return $fees;
+}
+
+function getDeliveryFeeById($conn, $delivery_fee_id, $total_amount) {
+    $stmt = $conn->prepare("SELECT id, name, fee, min_order_amount FROM delivery_fees WHERE id = ? AND is_active = 1");
+    $stmt->bind_param("i", $delivery_fee_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
+        if ($row['min_order_amount'] === null || $total_amount >= $row['min_order_amount']) {
+            $stmt->close();
+            return $row;
+        }
+    }
+    $stmt->close();
+    return null;
+}
+
 // ----- ORDER SUBMISSION -----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order']) && $user) {
     $name = sanitize($conn, $_POST['name']);
     $street_address = sanitize($conn, $_POST['address']);
     $phone = sanitize($conn, $_POST['phone']);
-    $delivery_fee = 5.00;
-    $total = 0;
+    $delivery_fee_id = isset($_POST['delivery_fee_id']) ? (int)$_POST['delivery_fee_id'] : 0;
+    $subtotal = 0;
 
     // Begin transaction
     $conn->begin_transaction();
 
     try {
-        // Calculate total and validate stock
-        $stmt = $conn->prepare("SELECT c.product_id, c.quantity, p.price, i.stock_quantity FROM cart c JOIN products p ON c.product_id = p.id LEFT JOIN inventory i ON p.id = i.product_id WHERE c.user_id = ?");
+        // Calculate subtotal and validate stock
+        $stmt = $conn->prepare("SELECT c.product_id, c.quantity, p.price, p.name, i.stock_quantity FROM cart c JOIN products p ON c.product_id = p.id LEFT JOIN inventory i ON p.id = i.product_id WHERE c.user_id = ?");
         $stmt->bind_param("i", $user['id']);
         $stmt->execute();
         $cart_items = $stmt->get_result();
         $items = [];
         while ($item = $cart_items->fetch_assoc()) {
             if ($item['stock_quantity'] < $item['quantity']) {
-                throw new Exception("Insufficient stock for product ID {$item['product_id']}. Available: {$item['stock_quantity']}, Requested: {$item['quantity']}");
+                throw new Exception("Insufficient stock for {$item['name']}. Available: {$item['stock_quantity']}, Requested: {$item['quantity']}");
             }
-            $total += $item['price'] * $item['quantity'];
+            $subtotal += $item['price'] * $item['quantity'];
             $items[] = $item;
         }
-        $total += $delivery_fee;
+        if (empty($items)) {
+            throw new Exception("Cart is empty.");
+        }
         $stmt->close();
 
+        // Validate delivery fee
+        $delivery_fee_data = $delivery_fee_id ? getDeliveryFeeById($conn, $delivery_fee_id, $subtotal) : null;
+        if (!$delivery_fee_data) {
+            // Fallback to cheapest applicable fee
+            $delivery_fees = getDeliveryFees($conn, $subtotal);
+            foreach ($delivery_fees as $fee) {
+                if ($fee['is_applicable']) {
+                    $delivery_fee_data = $fee;
+                    break;
+                }
+            }
+            if (!$delivery_fee_data) {
+                throw new Exception("No valid delivery options available for your order subtotal of $" . number_format($subtotal, 2));
+            }
+        }
+        $delivery_fee = $delivery_fee_data['fee'];
+        $delivery_fee_id = $delivery_fee_data['id'];
+        $total = $subtotal + $delivery_fee;
+
         // Insert or update address
-        $city = ''; // Placeholder
-        $state = ''; // Placeholder
-        $country = ''; // Placeholder
-        $postal_code = ''; // Placeholder
+        $city = '';
+        $state = '';
+        $country = '';
+        $postal_code = '';
         $is_default = 1;
 
+        // Fixed bind_param type string to match 12 variables
         $stmt = $conn->prepare("INSERT INTO addresses (user_id, full_name, street_address, city, state, country, postal_code, phone, is_default, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE full_name = ?, street_address = ?, phone = ?, updated_at = NOW()");
-        $stmt->bind_param("isssssssisss", $user['id'], $name, $street_address, $city, $state, $country, $postal_code, $phone, $is_default, $name, $street_address, $phone);
+        $stmt->bind_param("issssssissss", $user['id'], $name, $street_address, $city, $state, $country, $postal_code, $phone, $is_default, $name, $street_address, $phone);
         $stmt->execute();
         $address_id = $conn->insert_id;
         $stmt->close();
 
         // Fetch address_id if updated
         if (!$address_id) {
-            $stmt = $conn->prepare("SELECT id FROM addresses WHERE user_id = ?");
+            $stmt = $conn->prepare("SELECT id FROM addresses WHERE user_id = ? LIMIT 1");
             $stmt->bind_param("i", $user['id']);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -69,8 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order']) && $us
         }
 
         // Insert order
-        $stmt = $conn->prepare("INSERT INTO orders (user_id, address_id, total, delivery_fee, status, created_at) VALUES (?, ?, ?, ?, 'processing', NOW())");
-        $stmt->bind_param("iidd", $user['id'], $address_id, $total, $delivery_fee);
+        $stmt = $conn->prepare("INSERT INTO orders (user_id, address_id, delivery_fee_id, total, delivery_fee, status, created_at) VALUES (?, ?, ?, ?, ?, 'processing', NOW())");
+        $stmt->bind_param("iiidd", $user['id'], $address_id, $delivery_fee_id, $total, $delivery_fee);
         $stmt->execute();
         $order_id = $conn->insert_id;
         $stmt->close();
@@ -79,11 +130,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order']) && $us
         $order_item_stmt = $conn->prepare("INSERT INTO order_items (order_id, product_id, quantity, price, created_at) VALUES (?, ?, ?, ?, NOW())");
         $stock_stmt = $conn->prepare("UPDATE inventory SET stock_quantity = stock_quantity - ? WHERE product_id = ?");
         foreach ($items as $item) {
-            // Insert order item
             $order_item_stmt->bind_param("iiid", $order_id, $item['product_id'], $item['quantity'], $item['price']);
             $order_item_stmt->execute();
 
-            // Update stock
             $stock_stmt->bind_param("ii", $item['quantity'], $item['product_id']);
             $stock_stmt->execute();
         }
@@ -107,10 +156,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order']) && $us
         // Response
         if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
             header('Content-Type: application/json');
-            echo json_encode(['status' => 'success', 'message' => 'Order placed successfully']);
+            echo json_encode(['status' => 'success', 'message' => 'Order placed successfully', 'order_id' => $order_id]);
             exit;
         } else {
-            header('Location: order_success.php?success=' . urlencode('Order placed successfully!'));
+            header('Location: order_success.php?order_id=' . $order_id . '&success=' . urlencode('Order placed successfully!'));
             exit;
         }
     } catch (Exception $e) {
@@ -130,12 +179,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order']) && $us
 
 // ----- CART COUNT -----
 $cart_count = getCartCount($conn, $user);
+
+// ----- CALCULATE CURRENT SUBTOTAL AND DELIVERY FEES -----
+$current_subtotal = 0;
+$delivery_fees = [];
+$current_delivery_fee = 0;
+$current_delivery_fee_id = 0;
+if ($user && $cart_count > 0) {
+    $stmt = $conn->prepare("SELECT c.quantity, p.price FROM cart c JOIN products p ON c.product_id = p.id WHERE c.user_id = ?");
+    $stmt->bind_param("i", $user['id']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $current_subtotal += $row['price'] * $row['quantity'];
+    }
+    $stmt->close();
+
+    // Fetch all delivery fees
+    $delivery_fees = getDeliveryFees($conn, $current_subtotal);
+    // Select default fee (cheapest applicable)
+    foreach ($delivery_fees as $fee) {
+        if ($fee['is_applicable']) {
+            $current_delivery_fee = $fee['fee'];
+            $current_delivery_fee_id = $fee['id'];
+            break;
+        }
+    }
+}
+$current_total = $current_subtotal + $current_delivery_fee;
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Meta and CSS -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deeken - Checkout</title>
@@ -146,7 +222,6 @@ $cart_count = getCartCount($conn, $user);
     <link rel="stylesheet" href="stylesheet.css">
     <link rel="stylesheet" href="hamburger.css">
     <style>
-        /* ===== NAVIGATION ===== */
         .navbar {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -156,9 +231,8 @@ $cart_count = getCartCount($conn, $user);
             align-items: center;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
             position: sticky;
-            top: 100%;
+            top: 0;
             z-index: 1000;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
             transition: transform 0.3s ease;
         }
 
@@ -174,17 +248,6 @@ $cart_count = getCartCount($conn, $user);
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            transition: all 0.3s ease;
-        }
-
-        .logo:hover {
-            transform: scale(1.05);
-            color: #1a1aff;
-        }
-
-        .logo i {
-            font-size: 1.6rem;
-            color: #2a2aff;
         }
 
         .search-bar {
@@ -204,13 +267,6 @@ $cart_count = getCartCount($conn, $user);
             font-size: 14px;
             outline: none;
             background: rgba(255, 255, 255, 0.9);
-            transition: all 0.3s ease;
-        }
-
-        .search-bar input:focus {
-            border-color: #2a2aff;
-            box-shadow: 0 0 8px rgba(42, 42, 255, 0.1);
-            transform: translateY(-1px);
         }
 
         .search-bar button {
@@ -220,16 +276,8 @@ $cart_count = getCartCount($conn, $user);
             border-radius: 50px;
             color: white;
             cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
         }
 
-        .search-bar button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 15px rgba(42, 42, 255, 0.3);
-        }
-
-        /* ===== NAVIGATION RIGHT SECTION ===== */
         .nav-right {
             display: flex;
             align-items: center;
@@ -245,13 +293,6 @@ $cart_count = getCartCount($conn, $user);
             font-weight: 500;
             padding: 8px 16px;
             border-radius: 25px;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .cart-link:hover {
-            background: rgba(42, 42, 255, 0.1);
-            color: #2a2aff;
         }
 
         .cart-count {
@@ -264,25 +305,6 @@ $cart_count = getCartCount($conn, $user);
             align-items: center;
             justify-content: center;
             font-size: 12px;
-            font-weight: 600;
-            margin-left: -5px;
-        }
-
-        .admin-link {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            text-decoration: none;
-            color: #333;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 25px;
-            transition: all 0.3s ease;
-        }
-
-        .admin-link:hover {
-            background: rgba(42, 42, 255, 0.1);
-            color: #2a2aff;
         }
 
         .profile-dropdown {
@@ -296,14 +318,8 @@ $cart_count = getCartCount($conn, $user);
             cursor: pointer;
             padding: 8px 12px;
             border-radius: 8px;
-            transition: all 0.3s ease;
             border: 1px solid #e0e0e0;
             background: white;
-        }
-
-        .profile-trigger:hover {
-            background: #f8f9fa;
-            border-color: #2a2aff;
         }
 
         .profile-avatar {
@@ -315,34 +331,22 @@ $cart_count = getCartCount($conn, $user);
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 16px;
         }
 
         .profile-info {
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
         }
 
         .profile-greeting {
             font-size: 12px;
             color: #666;
-            line-height: 1.2;
         }
 
         .profile-account {
             font-size: 14px;
             font-weight: 500;
             color: #333;
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
-            line-height: 1.2;
-        }
-
-        .profile-account i {
-            font-size: 10px;
-            transition: transform 0.3s ease;
         }
 
         .profile-dropdown-menu {
@@ -359,7 +363,6 @@ $cart_count = getCartCount($conn, $user);
             visibility: hidden;
             transform: translateY(-10px);
             transition: all 0.3s ease;
-            margin-top: 5px;
         }
 
         .profile-dropdown-menu.show {
@@ -376,31 +379,6 @@ $cart_count = getCartCount($conn, $user);
             text-decoration: none;
             color: #333;
             font-size: 14px;
-            font-weight: 400;
-            transition: all 0.3s ease;
-            border-radius: 8px;
-            margin: 4px 8px;
-        }
-
-        .profile-dropdown-menu a:hover {
-            background: rgba(42, 42, 255, 0.1);
-            color: #2a2aff;
-        }
-
-        .profile-dropdown-menu a i {
-            width: 16px;
-            color: #666;
-        }
-
-        .dropdown-divider {
-            border: none;
-            height: 1px;
-            background: #e0e0e0;
-            margin: 8px 16px;
-        }
-
-        .hamburger {
-            display: none;
         }
 
         .checkout {
@@ -418,7 +396,7 @@ $cart_count = getCartCount($conn, $user);
             color: #333;
         }
 
-        .input-field {
+        .input-field, select {
             width: 100%;
             padding: 12px;
             margin: 0.5rem 0;
@@ -426,12 +404,6 @@ $cart_count = getCartCount($conn, $user);
             border-radius: 8px;
             font-size: 14px;
             font-family: 'Poppins', sans-serif;
-        }
-
-        .input-field:focus {
-            outline: none;
-            border-color: #2a2aff;
-            box-shadow: 0 0 8px rgba(42, 42, 255, 0.1);
         }
 
         .cart-item {
@@ -455,13 +427,28 @@ $cart_count = getCartCount($conn, $user);
             color: #333;
         }
 
-        .cart-item-details p {
-            margin: 0.5rem 0;
-            color: #666;
+        .order-totals {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 1rem 0;
         }
 
-        .btn,
-        button[type="submit"] {
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 0.5rem 0;
+        }
+
+        .total-row.final {
+            border-top: 2px solid #2a2aff;
+            padding-top: 0.75rem;
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #2a2aff;
+        }
+
+        .btn {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
@@ -471,20 +458,27 @@ $cart_count = getCartCount($conn, $user);
             border: none;
             border-radius: 8px;
             font-size: 16px;
-            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .btn:hover,
-        button[type="submit"]:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(42, 42, 255, 0.3);
+            width: 100%;
+            justify-content: center;
         }
 
         .empty-cart {
             text-align: center;
             padding: 2rem;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .stock-info.out-of-stock {
+            color: #ef4444;
+            font-weight: bold;
         }
 
         footer {
@@ -494,40 +488,25 @@ $cart_count = getCartCount($conn, $user);
             color: #666;
             margin-top: 2rem;
         }
-
-        .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            font-size: 14px;
-        }
-
-        .stock-info {
-            font-size: 0.9rem;
-            color: #666;
-        }
-
-        .out-of-stock {
-            color: #ef4444;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
     <header>
         <nav class="navbar">
             <a href="index.php" class="logo"><i class="fas fa-store"></i> Deeken</a>
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Search products...">
+                <button onclick="searchProducts()"><i class="fas fa-search"></i></button>
+            </div>
             <div class="nav-right">
                 <a href="cart.php" class="cart-link">
                     <i class="fas fa-shopping-cart"></i>
                     <span class="cart-text">Cart</span>
-                    <span class="cart-count"><?php echo $cart_count; ?></span>
-                </a>    
+                    <span class="cart-count"><?php echo htmlspecialchars($cart_count); ?></span>
+                </a>
                 <div class="profile-dropdown">
                     <?php if ($user): ?>
-                        <div class="profile-trigger" onclick="toggleProfileDropdown()">
+                        <div class="profile-trigger">
                             <div class="profile-avatar">
                                 <i class="fas fa-user"></i>
                             </div>
@@ -537,7 +516,7 @@ $cart_count = getCartCount($conn, $user);
                             </div>
                         </div>
                     <?php else: ?>
-                        <div class="profile-trigger" onclick="toggleProfileDropdown()">
+                        <div class="profile-trigger">
                             <div class="profile-avatar">
                                 <i class="fas fa-user"></i>
                             </div>
@@ -551,11 +530,14 @@ $cart_count = getCartCount($conn, $user);
                         <?php if ($user): ?>
                             <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
                             <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
-                            <a href="index.php"><i class="fas fa-heart"></i> Home</a>
+                            <a href="index.php"><i class="fas fa-home"></i> Home</a>
+                            <?php if ($user['is_admin']): ?>
+                                <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
+                            <?php endif; ?>
                             <hr class="dropdown-divider">
                             <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
                         <?php else: ?>
-                            <a href="login.php"><i class="fas fa-sign-in"></i> Sign In</a>
+                            <a href="login.php"><i class="fas fa-sign-in-alt"></i> Sign In</a>
                             <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
                             <hr class="dropdown-divider">
                             <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
@@ -577,23 +559,42 @@ $cart_count = getCartCount($conn, $user);
                     <p>Your cart is empty.</p>
                     <a href="index.php" class="btn"><i class="fas fa-shopping-cart"></i> Start Shopping</a>
                 </div>
+            <?php elseif (empty($delivery_fees)): ?>
+                <div class="alert-error">No delivery options available. Please contact support.</div>
             <?php else: ?>
-                <form id="checkoutForm" method="POST" action="">
+                <form id="checkoutForm" method="POST">
                     <h3>Delivery Information</h3>
                     <input type="text" name="name" class="input-field" placeholder="Enter your full name" value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>" required>
                     <input type="text" name="address" class="input-field" placeholder="Enter your street address" value="<?php echo htmlspecialchars($user['address'] ?? ''); ?>" required>
                     <input type="text" name="phone" class="input-field" placeholder="Enter your phone number" value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>" required>
+
+                    <h3>Delivery Options</h3>
+                    <select name="delivery_fee_id" id="deliverySelect" class="input-field" required onchange="updateTotals()">
+                        <?php foreach ($delivery_fees as $fee): ?>
+                            <option value="<?php echo htmlspecialchars($fee['id']); ?>"
+                                    <?php echo $fee['id'] == $current_delivery_fee_id ? 'selected' : ''; ?>
+                                    <?php echo !$fee['is_applicable'] ? 'disabled' : ''; ?>
+                                    data-fee="<?php echo htmlspecialchars($fee['fee']); ?>">
+                                <?php echo htmlspecialchars($fee['name']); ?> - $<?php echo number_format($fee['fee'], 2); ?>
+                                <?php if ($fee['min_order_amount']): ?>
+                                    (Min. order: $<?php echo number_format($fee['min_order_amount'], 2); ?>)
+                                <?php endif; ?>
+                                <?php if (!$fee['is_applicable']): ?>
+                                    (Subtotal too low)
+                                <?php endif; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+
                     <h3>Order Summary</h3>
                     <div id="orderSummary">
                         <?php
-                        $total = 0;
                         $stmt = $conn->prepare("SELECT c.product_id, c.quantity, p.name, p.price, p.image, i.stock_quantity FROM cart c JOIN products p ON c.product_id = p.id LEFT JOIN inventory i ON p.id = i.product_id WHERE c.user_id = ?");
                         $stmt->bind_param("i", $user['id']);
                         $stmt->execute();
                         $cart_items = $stmt->get_result();
                         while ($item = $cart_items->fetch_assoc()):
                             $item_total = $item['price'] * $item['quantity'];
-                            $total += $item_total;
                         ?>
                             <div class="cart-item">
                                 <img src="<?php echo htmlspecialchars($item['image']); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" class="cart-item-image">
@@ -610,9 +611,25 @@ $cart_count = getCartCount($conn, $user);
                             </div>
                         <?php endwhile; $stmt->close(); ?>
                     </div>
-                    <p>Delivery Fee: $<span id="deliveryFee">5.00</span></p>
-                    <p>Total: $<span id="orderTotal"><?php echo number_format($total + 5.00, 2); ?></span></p>
-                    <button type="submit" name="place_order"><i class="fas fa-credit-card"></i> Place Order</button>
+
+                    <div class="order-totals">
+                        <div class="total-row">
+                            <span>Subtotal:</span>
+                            <span id="subtotal">$<?php echo number_format($current_subtotal, 2); ?></span>
+                        </div>
+                        <div class="total-row">
+                            <span>Delivery Fee:</span>
+                            <span id="deliveryFee">$<?php echo number_format($current_delivery_fee, 2); ?></span>
+                        </div>
+                        <div class="total-row final">
+                            <span>Total:</span>
+                            <span id="total">$<?php echo number_format($current_total, 2); ?></span>
+                        </div>
+                    </div>
+
+                    <button type="submit" name="place_order" class="btn">
+                        <i class="fas fa-credit-card"></i> Place Order - $<span id="buttonTotal"><?php echo number_format($current_total, 2); ?></span>
+                    </button>
                 </form>
             <?php endif; ?>
         </section>
@@ -625,78 +642,79 @@ $cart_count = getCartCount($conn, $user);
     <script src="utils.js"></script>
     <script src="hamburger.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Toggle profile dropdown
-            function toggleProfileDropdown() {
-                const dropdown = document.getElementById('profileDropdown');
-                if (dropdown) {
-                    dropdown.classList.toggle('show');
-                }
-            }
+        // Toggle profile dropdown
+        function toggleProfileDropdown(event) {
+            event?.preventDefault();
+            event?.stopPropagation();
+            const dropdown = document.getElementById('profileDropdown');
+            dropdown.classList.toggle('show');
+        }
 
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(event) {
-                const profileDropdown = document.querySelector('.profile-dropdown');
+        // Initialize dropdown
+        document.addEventListener('DOMContentLoaded', () => {
+            const profileTrigger = document.querySelector('.profile-trigger');
+            if (profileTrigger) profileTrigger.addEventListener('click', toggleProfileDropdown);
+
+            // Close dropdown on outside click
+            document.addEventListener('click', (event) => {
                 const dropdown = document.getElementById('profileDropdown');
-                if (profileDropdown && dropdown && !profileDropdown.contains(event.target)) {
+                if (!event.target.closest('.profile-dropdown') && dropdown.classList.contains('show')) {
                     dropdown.classList.remove('show');
                 }
             });
+        });
 
-            // Ensure the toggle function is globally available
-            window.toggleProfileDropdown = toggleProfileDropdown;
-
-            // Navbar scroll behavior
-            let lastScrollTop = 0;
-            const navbar = document.querySelector('.navbar');
-            if (navbar) {
-                window.addEventListener('scroll', function() {
-                    let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-                    if (currentScroll > lastScrollTop) {
-                        navbar.classList.add('hidden');
-                    } else {
-                        navbar.classList.remove('hidden');
-                    }
-                    if (currentScroll <= 0) {
-                        navbar.classList.remove('hidden');
-                    }
-                    lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
-                });
+        // Navbar scroll behavior
+        let lastScrollTop = 0;
+        const navbar = document.querySelector('.navbar');
+        window.addEventListener('scroll', () => {
+            let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+            if (currentScroll > lastScrollTop) {
+                navbar.classList.add('hidden');
+            } else {
+                navbar.classList.remove('hidden');
             }
+            lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+        });
 
-            // Handle checkout form submission
+        // Search products
+        function searchProducts() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (query) {
+                window.location.href = `index.php?search=${encodeURIComponent(query)}`;
+            }
+        }
+
+        // Update totals on delivery selection
+        function updateTotals() {
+            const select = document.getElementById('deliverySelect');
+            const fee = parseFloat(select.options[select.selectedIndex].dataset.fee) || 0;
+            const subtotal = <?php echo $current_subtotal; ?>;
+            const total = subtotal + fee;
+
+            document.getElementById('deliveryFee').textContent = `$${fee.toFixed(2)}`;
+            document.getElementById('total').textContent = `$${total.toFixed(2)}`;
+            document.getElementById('buttonTotal').textContent = total.toFixed(2);
+        }
+
+        // Form submission
+        document.addEventListener('DOMContentLoaded', () => {
             const form = document.getElementById('checkoutForm');
             if (form) {
-                console.log('Checkout form found, attaching event listener');
-                form.addEventListener('submit', function(event) {
+                form.addEventListener('submit', (event) => {
                     event.preventDefault();
-                    console.log('Form submission intercepted');
-
                     const formData = new FormData(form);
-                    console.log('Sending fetch request');
-
                     fetch(window.location.href, {
                         method: 'POST',
                         body: formData,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
                     })
-                    .then(response => {
-                        console.log('Fetch response received', response);
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! Status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
+                    .then(response => response.json())
                     .then(data => {
-                        console.log('Parsed JSON data', data);
                         if (data.status === 'success') {
-                            console.log('Success status received, redirecting to order_success.php');
-                            window.location.href = 'order_success.php?success=' + encodeURIComponent('Order placed successfully!');
+                            window.location.href = `order_success.php?order_id=${data.order_id}&success=${encodeURIComponent(data.message)}`;
                         } else {
-                            console.error('Error status received', data.message);
-                            alert(data.message || 'An error occurred while placing your order. Please try again.');
+                            alert(`Error: ${data.message}`);
                         }
                     })
                     .catch(error => {
@@ -704,14 +722,8 @@ $cart_count = getCartCount($conn, $user);
                         alert('An error occurred while placing your order. Please try again.');
                     });
                 });
-            } else {
-                console.error('Checkout form not found');
             }
         });
     </script>
 </body>
 </html>
-<?php
-// ----- CLEANUP -----
-$conn->close();
-?>

@@ -89,6 +89,112 @@ if (isset($_POST['action']) && $_POST['action'] === 'fetch_categories') {
     echo json_encode($categories);
     exit;
 }
+// ----- AJAX FETCH DELIVERY FEES -----
+if (isset($_POST['action']) && $_POST['action'] === 'fetch_delivery_fees') {
+    $delivery_fees = [];
+    try {
+        $result = $conn->query("SELECT id, name, fee, min_order_amount, description, is_active FROM delivery_fees");
+        while ($row = $result->fetch_assoc()) {
+            $delivery_fees[] = $row;
+        }
+    } catch (Exception $e) {
+        error_log("Fetch delivery fees error: " . $e->getMessage());
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode($delivery_fees);
+    exit;
+}
+
+// ----- DELIVERY FEE CREATION HANDLING -----
+if (isset($_POST['add_delivery_fee'])) {
+    $name = trim($_POST['name']);
+    $fee = (float)$_POST['fee'];
+    $min_order_amount = !empty($_POST['min_order_amount']) ? (float)$_POST['min_order_amount'] : null;
+    $description = trim($_POST['description']);
+    $is_active = isset($_POST['is_active']) ? 1 : 0;
+
+    if (empty($name)) {
+        $error_message = "Delivery fee name is required.";
+    } elseif ($fee < 0) {
+        $error_message = "Fee must be non-negative.";
+    } else {
+        try {
+            $stmt = $conn->prepare("INSERT INTO delivery_fees (name, fee, min_order_amount, description, is_active) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("sddsi", $name, $fee, $min_order_amount, $description, $is_active);
+            if ($stmt->execute()) {
+                $success_message = "Delivery fee added successfully.";
+            } else {
+                throw new Exception("Failed to add delivery fee.");
+            }
+            $stmt->close();
+        } catch (Exception $e) {
+            $error_message = "Failed to add delivery fee: " . $e->getMessage();
+            error_log("Delivery fee creation error: " . $e->getMessage());
+        }
+    }
+}
+
+// ----- DELIVERY FEE EDIT HANDLING -----
+if (isset($_POST['edit_delivery_fee'])) {
+    $id = (int)$_POST['id'];
+    $name = trim($_POST['name']);
+    $fee = (float)$_POST['fee'];
+    $min_order_amount = !empty($_POST['min_order_amount']) ? (float)$_POST['min_order_amount'] : null;
+    $description = trim($_POST['description']);
+    $is_active = isset($_POST['is_active']) ? 1 : 0;
+
+    if (empty($name)) {
+        $error_message = "Delivery fee name is required.";
+    } elseif ($fee < 0) {
+        $error_message = "Fee must be non-negative.";
+    } else {
+        try {
+            $stmt = $conn->prepare("UPDATE delivery_fees SET name = ?, fee = ?, min_order_amount = ?, description = ?, is_active = ? WHERE id = ?");
+            $stmt->bind_param("sddsii", $name, $fee, $min_order_amount, $description, $is_active, $id);
+            if ($stmt->execute()) {
+                $success_message = "Delivery fee updated successfully.";
+            } else {
+                throw new Exception("Failed to update delivery fee.");
+            }
+            $stmt->close();
+        } catch (Exception $e) {
+            $error_message = "Failed to update delivery fee: " . $e->getMessage();
+            error_log("Delivery fee update error: " . $e->getMessage());
+        }
+    }
+}
+
+// ----- DELIVERY FEE DELETION HANDLING -----
+if (isset($_POST['delete_delivery_fee'])) {
+    $id = (int)$_POST['id'];
+
+    try {
+        // Check if delivery fee is associated with orders
+        $stmt = $conn->prepare("SELECT COUNT(*) as count FROM orders WHERE delivery_fee_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $order_count = $result->fetch_assoc()['count'];
+        $stmt->close();
+
+        if ($order_count > 0) {
+            $error_message = "Cannot delete delivery fee because it is associated with orders.";
+        } else {
+            $stmt = $conn->prepare("DELETE FROM delivery_fees WHERE id = ?");
+            $stmt->bind_param("i", $id);
+            if ($stmt->execute()) {
+                $success_message = "Delivery fee deleted successfully.";
+            } else {
+                throw new Exception("Failed to delete delivery fee.");
+            }
+            $stmt->close();
+        }
+    } catch (Exception $e) {
+        $error_message = "Failed to delete delivery fee: " . $e->getMessage();
+        error_log("Delivery fee deletion error: " . $e->getMessage());
+    }
+}
 
 // ----- CATEGORY CREATION HANDLING -----
 if (isset($_POST['add_category'])) {
@@ -109,7 +215,32 @@ if (isset($_POST['add_category'])) {
             $stmt->close();
         } catch (Exception $e) {
             $error_message = "Failed to add category: " . $e->getMessage();
-            error_log($e->getMessage());
+            error_log("Category creation error: " . $e->getMessage());
+        }
+    }
+}
+
+// ----- CATEGORY EDIT HANDLING -----
+if (isset($_POST['edit_category'])) {
+    $category_id = (int)$_POST['category_id'];
+    $category_name = trim($_POST['category_name']);
+    $category_description = trim($_POST['category_description']);
+
+    if (empty($category_name)) {
+        $error_message = "Category name is required.";
+    } else {
+        try {
+            $stmt = $conn->prepare("UPDATE categories SET name = ?, description = ? WHERE id = ?");
+            $stmt->bind_param("ssi", $category_name, $category_description, $category_id);
+            if ($stmt->execute()) {
+                $success_message = "Category updated successfully.";
+            } else {
+                throw new Exception("Failed to update category.");
+            }
+            $stmt->close();
+        } catch (Exception $e) {
+            $error_message = "Failed to update category: " . $e->getMessage();
+            error_log("Category update error: " . $e->getMessage());
         }
     }
 }
@@ -119,17 +250,29 @@ if (isset($_POST['delete_category'])) {
     $category_id = (int)$_POST['id'];
 
     try {
-        $stmt = $conn->prepare("DELETE FROM categories WHERE id = ?");
+        // Check if category has associated products
+        $stmt = $conn->prepare("SELECT COUNT(*) as count FROM products WHERE category_id = ?");
         $stmt->bind_param("i", $category_id);
-        if ($stmt->execute()) {
-            $success_message = "Category deleted successfully.";
-        } else {
-            throw new Exception("Failed to delete category.");
-        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $product_count = $result->fetch_assoc()['count'];
         $stmt->close();
+
+        if ($product_count > 0) {
+            $error_message = "Cannot delete category because it has associated products.";
+        } else {
+            $stmt = $conn->prepare("DELETE FROM categories WHERE id = ?");
+            $stmt->bind_param("i", $category_id);
+            if ($stmt->execute()) {
+                $success_message = "Category deleted successfully.";
+            } else {
+                throw new Exception("Failed to delete category.");
+            }
+            $stmt->close();
+        }
     } catch (Exception $e) {
         $error_message = "Failed to delete category: " . $e->getMessage();
-        error_log($e->getMessage());
+        error_log("Category deletion error: " . $e->getMessage());
     }
 }
 
@@ -142,70 +285,208 @@ if (isset($_POST['add_product'])) {
     $misc_attribute = trim($_POST['misc_attribute']);
     $featured = isset($_POST['featured']) ? 1 : 0;
     $product_description = trim($_POST['product_description']);
-    $image_url = 'https://via.placeholder.com/150'; // Default image
+    $image_url = 'https://via.placeholder.com/150';
 
+    // Validate inputs
     if (empty($product_name)) {
         $error_message = "Product name is required.";
+    } elseif ($price <= 0) {
+        $error_message = "Price must be greater than 0.";
+    } elseif ($category_id <= 0) {
+        $error_message = "Please select a valid category.";
     } else {
-        // Handle file upload
-        if (!empty($_FILES['image']['name'])) {
-            $target_dir = "Uploads/";
-            if (!is_dir($target_dir)) {
-                mkdir($target_dir, 0777, true);
-            }
-            $target_file = $target_dir . basename($_FILES['image']['name']);
-            $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
-            $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
-
-            if (in_array($imageFileType, $allowed_types) && $_FILES['image']['size'] <= 5000000) {
+        // Validate misc_attribute
+        $valid_attributes = ['new_arrival', 'featured', 'trending', ''];
+        if (!in_array($misc_attribute, $valid_attributes)) {
+            $error_message = "Invalid miscellaneous attribute selected.";
+        } else {
+            // Handle file upload
+            if (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                $target_dir = "Uploads/";
+                if (!is_dir($target_dir)) {
+                    mkdir($target_dir, 0755, true);
+                }
+                if (!is_writable($target_dir)) {
+                    $error_message = "Upload directory is not writable.";
+                } else {
+                    $imageFileType = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+                    $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
+                    if (!in_array($imageFileType, $allowed_types)) {
+                        $error_message = "Only JPG, JPEG, PNG, and GIF files are allowed.";
+                    } elseif ($_FILES['image']['size'] > 5000000) {
+                        $error_message = "Image size exceeds 5MB limit.";
+                    } else {
+                // Generate unique file name to prevent overwrites
+                $unique_name = uniqid('img_') . '.' . $imageFileType;
+                $target_file = $target_dir . $unique_name;
                 if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
                     $image_url = $target_file;
                 } else {
                     $error_message = "Failed to upload image.";
                 }
-            } else {
-                $error_message = "Invalid image format or size too large.";
+            }
+                }
+            }
+
+            if (!isset($error_message)) {
+                $conn->begin_transaction();
+                try {
+                    // Check for duplicate SKU
+                    $sku = "PROD" . str_pad(mt_rand(1, 99999), 5, '0', STR_PAD_LEFT);
+                    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM products WHERE sku = ?");
+                    $stmt->bind_param("s", $sku);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    if ($result->fetch_assoc()['count'] > 0) {
+                        throw new Exception("Generated SKU already exists.");
+                    }
+                    $stmt->close();
+
+                    // Insert product
+                    $stmt = $conn->prepare("
+                        INSERT INTO products (category_id, name, sku, price, image, description, featured, rating)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 0.0)
+                    ");
+                    $description = !empty($product_description) ? $product_description : "No description provided.";
+                    $stmt->bind_param("issdssi", $category_id, $product_name, $sku, $price, $image_url, $description, $featured);
+                    if (!$stmt->execute()) {
+                        throw new Exception("Failed to add product: " . $conn->error);
+                    }
+                    $product_id = $conn->insert_id;
+                    $stmt->close();
+
+                    // Insert inventory
+                    $inv_stmt = $conn->prepare("INSERT INTO inventory (product_id, stock_quantity) VALUES (?, ?)");
+                    $inv_stmt->bind_param("ii", $product_id, $stock_quantity);
+                    if (!$inv_stmt->execute()) {
+                        throw new Exception("Failed to add inventory: " . $conn->error);
+                    }
+                    $inv_stmt->close();
+                    // Insert miscellaneous attribute
+                    if (!empty($misc_attribute)) {
+                        $attr_stmt = $conn->prepare("INSERT INTO miscellaneous_attributes (product_id, attribute) VALUES (?, ?)");
+                        $attr_stmt->bind_param("is", $product_id, $misc_attribute);
+                        if (!$attr_stmt->execute()) {
+                            throw new Exception("Failed to add miscellaneous attribute: " . $conn->error);
+                        }
+                        $attr_stmt->close();
+                    }
+
+                    $conn->commit();
+                    $success_message = "Product added successfully.";
+                } catch (Exception $e) {
+                    $conn->rollback();
+                    $error_message = "Failed to add product: " . $e->getMessage();
+                    error_log("Product addition error: " . $e->getMessage());
+                }
             }
         }
+    }
+}
 
-        if (!isset($error_message)) {
-            $conn->begin_transaction();
-            try {
-                $stmt = $conn->prepare("
-                    INSERT INTO products (category_id, name, sku, price, image, description, featured, rating)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 0.0)
-                ");
-                $sku = "PROD" . str_pad(mt_rand(1, 99999), 5, '0', STR_PAD_LEFT);
-                $description = !empty($product_description) ? $product_description : "No description provided.";
-                $stmt->bind_param("issdssi", $category_id, $product_name, $sku, $price, $image_url, $description, $featured);
-                if (!$stmt->execute()) {
-                    throw new Exception("Failed to add product.");
+// ----- PRODUCT EDIT HANDLING -----
+if (isset($_POST['edit_product'])) {
+    $product_id = (int)$_POST['product_id'];
+    $product_name = trim($_POST['product_name']);
+    $price = (float)$_POST['price'];
+    $stock_quantity = (int)$_POST['stock_quantity'];
+    $category_id = (int)$_POST['category_id'];
+    $misc_attribute = trim($_POST['misc_attribute']); // Fixed line
+    $featured = isset($_POST['featured']) ? 1 : 0;
+    $product_description = trim($_POST['product_description']);
+    $image_url = $_POST['existing_image'];
+
+    // Validate inputs
+    if (empty($product_name)) {
+        $error_message = "Product name is required.";
+    } elseif ($price <= 0) {
+        $error_message = "Price must be greater than 0.";
+    } elseif ($category_id <= 0) {
+        $error_message = "Please select a valid category.";
+    } else {
+        // Validate misc_attribute
+        $valid_attributes = ['new_arrival', 'featured', 'trending', ''];
+        if (!in_array($misc_attribute, $valid_attributes)) {
+            $error_message = "Invalid miscellaneous attribute selected.";
+        } else {
+            // Handle file upload
+            if (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                $target_dir = "Uploads/";
+                if (!is_dir($target_dir)) {
+                    mkdir($target_dir, 0755, true);
                 }
-                $product_id = $conn->insert_id;
-                $stmt->close();
-
-                $inv_stmt = $conn->prepare("INSERT INTO inventory (product_id, stock_quantity) VALUES (?, ?)");
-                $inv_stmt->bind_param("ii", $product_id, $stock_quantity);
-                if (!$inv_stmt->execute()) {
-                    throw new Exception("Failed to add inventory.");
-                }
-                $inv_stmt->close();
-
-                if (!empty($misc_attribute)) {
-                    $attr_stmt = $conn->prepare("INSERT INTO miscellaneous_attributes (product_id, attribute) VALUES (?, ?)");
-                    $attr_stmt->bind_param("is", $product_id, $misc_attribute);
-                    if (!$attr_stmt->execute()) {
-                        throw new Exception("Failed to add miscellaneous attribute.");
+                if (!is_writable($target_dir)) {
+                    $error_message = "Upload directory is not writable.";
+                } else {
+                    $imageFileType = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+                    $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
+                    if (!in_array($imageFileType, $allowed_types)) {
+                        $error_message = "Only JPG, JPEG, PNG, and GIF files are allowed.";
+                    } elseif ($_FILES['image']['size'] > 5000000) {
+                        $error_message = "Image size exceeds 5MB limit.";
+                    } else {
+                        // Generate unique file name
+                        $unique_name = uniqid('img_') . '.' . $imageFileType;
+                        $target_file = $target_dir . $unique_name;
+                        if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
+                            // Delete old image if it exists and is not the default
+                            if ($image_url !== 'https://via.placeholder.com/150' && file_exists($image_url)) {
+                                unlink($image_url);
+                            }
+                            $image_url = $target_file;
+                        } else {
+                            $error_message = "Failed to upload new image.";
+                        }
                     }
-                    $attr_stmt->close();
                 }
+            }
 
-                $conn->commit();
-                $success_message = "Product added successfully.";
-            } catch (Exception $e) {
-                $conn->rollback();
-                $error_message = "Failed to add product: " . $e->getMessage();
-                error_log($e->getMessage());
+            if (!isset($error_message)) {
+                $conn->begin_transaction();
+                try {
+                    // Update product
+                    $stmt = $conn->prepare("
+                        UPDATE products 
+                        SET category_id = ?, name = ?, price = ?, image = ?, description = ?, featured = ?
+                        WHERE id = ?
+                    ");
+                    $description = !empty($product_description) ? $product_description : "No description provided.";
+                    $stmt->bind_param("isdssii", $category_id, $product_name, $price, $image_url, $description, $featured, $product_id);
+                    if (!$stmt->execute()) {
+                        throw new Exception("Failed to update product: " . $conn->error);
+                    }
+                    $stmt->close();
+
+                    // Update inventory
+                    $inv_stmt = $conn->prepare("UPDATE inventory SET stock_quantity = ? WHERE product_id = ?");
+                    $inv_stmt->bind_param("ii", $stock_quantity, $product_id);
+                    if (!$inv_stmt->execute()) {
+                        throw new Exception("Failed to update inventory: " . $conn->error);
+                    }
+                    $inv_stmt->close();
+
+                    // Update or insert miscellaneous attribute
+                    $attr_stmt = $conn->prepare("DELETE FROM miscellaneous_attributes WHERE product_id = ?");
+                    $attr_stmt->bind_param("i", $product_id);
+                    $attr_stmt->execute();
+                    $attr_stmt->close();
+
+                    if (!empty($misc_attribute)) {
+                        $attr_stmt = $conn->prepare("INSERT INTO miscellaneous_attributes (product_id, attribute) VALUES (?, ?)");
+                        $attr_stmt->bind_param("is", $product_id, $misc_attribute);
+                        if (!$attr_stmt->execute()) {
+                            throw new Exception("Failed to update miscellaneous attribute: " . $conn->error);
+                        }
+                        $attr_stmt->close();
+                    }
+
+                    $conn->commit();
+                    $success_message = "Product updated successfully.";
+                } catch (Exception $e) {
+                    $conn->rollback();
+                    $error_message = "Failed to update product: " . $e->getMessage();
+                    error_log("Product update error: " . $e->getMessage());
+                }
             }
         }
     }
@@ -217,16 +498,35 @@ if (isset($_POST['delete_product'])) {
 
     $conn->begin_transaction();
     try {
-        $conn->query("DELETE FROM cart WHERE product_id = $product_id");
-        $conn->query("DELETE FROM order_items WHERE product_id = $product_id");
-        $conn->query("DELETE FROM reviews WHERE product_id = $product_id");
-        $conn->query("DELETE FROM inventory WHERE product_id = $product_id");
-        $conn->query("DELETE FROM miscellaneous_attributes WHERE product_id = $product_id");
+        // Fetch image path to delete file
+        $stmt = $conn->prepare("SELECT image FROM products WHERE id = ?");
+        $stmt->bind_param("i", $product_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($row = $result->fetch_assoc()) {
+            $image_path = $row['image'];
+            if ($image_path !== 'https://via.placeholder.com/150' && file_exists($image_path)) {
+                unlink($image_path);
+            }
+        }
+        $stmt->close();
 
+        // Delete related records using prepared statements
+        $tables = ['cart', 'order_items', 'reviews', 'inventory', 'miscellaneous_attributes'];
+        foreach ($tables as $table) {
+            $stmt = $conn->prepare("DELETE FROM $table WHERE product_id = ?");
+            $stmt->bind_param("i", $product_id);
+            if (!$stmt->execute()) {
+                throw new Exception("Failed to delete from $table: " . $conn->error);
+            }
+            $stmt->close();
+        }
+
+        // Delete product
         $stmt = $conn->prepare("DELETE FROM products WHERE id = ?");
         $stmt->bind_param("i", $product_id);
         if (!$stmt->execute()) {
-            throw new Exception("Failed to delete product.");
+            throw new Exception("Failed to delete product: " . $conn->error);
         }
         $stmt->close();
 
@@ -235,7 +535,7 @@ if (isset($_POST['delete_product'])) {
     } catch (Exception $e) {
         $conn->rollback();
         $error_message = "Failed to delete product: " . $e->getMessage();
-        error_log($e->getMessage());
+        error_log("Product deletion error: " . $e->getMessage());
     }
 }
 
@@ -245,29 +545,34 @@ if (isset($_POST['add_carousel_image'])) {
     $subtitle = trim($_POST['subtitle']);
     $link = trim($_POST['link']);
     $is_active = isset($_POST['is_active']) ? 1 : 0;
-    $image_url = 'https://via.placeholder.com/400x300'; // Default image
+    $image_url = 'https://via.placeholder.com/400x300';
 
     if (empty($title) || empty($subtitle)) {
         $error_message = "Title and subtitle are required.";
     } else {
-        // Handle file upload
-        if (!empty($_FILES['image']['name'])) {
+        if (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             $target_dir = "Uploads/carousel/";
             if (!is_dir($target_dir)) {
-                mkdir($target_dir, 0777, true);
+                mkdir($target_dir, 0755, true);
             }
-            $target_file = $target_dir . basename($_FILES['image']['name']);
-            $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
-            $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
-
-            if (in_array($imageFileType, $allowed_types) && $_FILES['image']['size'] <= 5000000) {
-                if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                    $image_url = $target_file;
-                } else {
-                    $error_message = "Failed to upload carousel image.";
-                }
+            if (!is_writable($target_dir)) {
+                $error_message = "Carousel upload directory is not writable.";
             } else {
-                $error_message = "Invalid image format or size too large.";
+                $imageFileType = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+                $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
+                if (!in_array($imageFileType, $allowed_types)) {
+                    $error_message = "Only JPG, JPEG, PNG, and GIF files are allowed.";
+                } elseif ($_FILES['image']['size'] > 5000000) {
+                    $error_message = "Image size exceeds 5MB limit.";
+                } else {
+                    $unique_name = uniqid('carousel_') . '.' . $imageFileType;
+                    $target_file = $target_dir . $unique_name;
+                    if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
+                        $image_url = $target_file;
+                    } else {
+                        $error_message = "Failed to upload carousel image.";
+                    }
+                }
             }
         }
 
@@ -278,12 +583,12 @@ if (isset($_POST['add_carousel_image'])) {
                 if ($stmt->execute()) {
                     $success_message = "Carousel image added successfully.";
                 } else {
-                    throw new Exception("Failed to add carousel image.");
+                    throw new Exception("Failed to add carousel image: " . $conn->error);
                 }
                 $stmt->close();
             } catch (Exception $e) {
                 $error_message = "Failed to add carousel image: " . $e->getMessage();
-                error_log($e->getMessage());
+                error_log("Carousel image addition error: " . $e->getMessage());
             }
         }
     }
@@ -301,7 +606,7 @@ if (isset($_POST['delete_carousel_image'])) {
         $result = $stmt->get_result();
         if ($row = $result->fetch_assoc()) {
             $image_path = $row['image'];
-            if (file_exists($image_path) && $image_path !== 'https://via.placeholder.com/400x300') {
+            if ($image_path !== 'https://via.placeholder.com/400x300' && file_exists($image_path)) {
                 unlink($image_path);
             }
         }
@@ -313,12 +618,12 @@ if (isset($_POST['delete_carousel_image'])) {
         if ($stmt->execute()) {
             $success_message = "Carousel image deleted successfully.";
         } else {
-            throw new Exception("Failed to delete carousel image.");
+            throw new Exception("Failed to delete carousel image: " . $conn->error);
         }
         $stmt->close();
     } catch (Exception $e) {
         $error_message = "Failed to delete carousel image: " . $e->getMessage();
-        error_log($e->getMessage());
+        error_log("Carousel image deletion error: " . $e->getMessage());
     }
 }
 
@@ -333,12 +638,12 @@ if (isset($_POST['toggle_carousel_image'])) {
         if ($stmt->execute()) {
             $success_message = "Carousel image status updated successfully.";
         } else {
-            throw new Exception("Failed to update carousel image status.");
+            throw new Exception("Failed to update carousel image status: " . $conn->error);
         }
         $stmt->close();
     } catch (Exception $e) {
         $error_message = "Failed to update carousel image status: " . $e->getMessage();
-        error_log($e->getMessage());
+        error_log("Carousel image status update error: " . $e->getMessage());
     }
 }
 
@@ -378,7 +683,7 @@ if (isset($_POST['change_password'])) {
             }
         } catch (Exception $e) {
             $error_security = "Failed to change password: " . $e->getMessage();
-            error_log($e->getMessage());
+            error_log("Password change error: " . $e->getMessage());
         }
     }
 }
@@ -422,7 +727,7 @@ while ($row = $result->fetch_assoc()) {
 // ----- FETCH PRODUCTS -----
 $products = [];
 $result = $conn->query("
-    SELECT p.id, p.name, p.price, p.description, i.stock_quantity, p.image, c.name AS category, ma.attribute AS misc_attribute
+    SELECT p.id, p.name, p.price, p.description, i.stock_quantity, p.image, c.name AS category, ma.attribute AS misc_attribute, p.featured
     FROM products p
     LEFT JOIN inventory i ON p.id = i.product_id
     LEFT JOIN categories c ON p.category_id = c.id
@@ -454,7 +759,7 @@ if ($result) {
 
 // ----- FETCH CATEGORIES FOR FORM -----
 $categories = [];
-$result = $conn->query("SELECT id, name FROM categories");
+$result = $conn->query("SELECT id, name, description FROM categories");
 while ($row = $result->fetch_assoc()) {
     $categories[] = $row;
 }
@@ -465,7 +770,14 @@ $result = $conn->query("SELECT * FROM carousel_images ORDER BY created_at DESC")
 while ($row = $result->fetch_assoc()) {
     $carousel_images[] = $row;
 }
+// ----- FETCH DELIVERY FEES -----
+$delivery_fees = [];
+$result = $conn->query("SELECT id, name, fee, min_order_amount, description, is_active FROM delivery_fees");
+while ($row = $result->fetch_assoc()) {
+    $delivery_fees[] = $row;
+}
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -1015,6 +1327,10 @@ while ($row = $result->fetch_assoc()) {
             border: 1px solid #e2e8f0;
         }
 
+        .btn-edit {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
         .table-container {
             overflow-x: auto;
             border-radius: 12px;
@@ -1253,6 +1569,7 @@ while ($row = $result->fetch_assoc()) {
             <div class="tab" data-tab="products">Product Management</div>
             <div class="tab" data-tab="orders">Orders</div>
             <div class="tab" data-tab="carousel">Carousel</div>
+            <div class="tab" data-tab="delivery_fees">Delivery Fees</div>
             <div class="tab" data-tab="security">Security</div>
         </div>
 
@@ -1336,23 +1653,24 @@ while ($row = $result->fetch_assoc()) {
             <div class="section">
                 <div class="section-header">
                     <h2 class="section-title">Category Management</h2>
-                    <button class="btn" onclick="toggleCategoryForm()">
+                    <button class="btn btn-primary" onclick="toggleCategoryForm('add')">
                         <i class="fas fa-plus"></i>
                         Add Category
                     </button>
                 </div>
                 <div id="categoryForm" style="display: none;">
                     <form method="POST" id="categoryFormElement">
+                        <input type="hidden" name="category_id" id="categoryId">
                         <div class="form-group">
                             <label class="form-label">Category Name</label>
-                            <input type="text" class="form-input" name="category_name" required>
+                            <input type="text" class="form-input" name="category_name" id="categoryName" required>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Description</label>
-                            <textarea class="form-input" name="category_description" rows="3"></textarea>
+                            <textarea class="form-input" name="category_description" id="categoryDescription" rows="3"></textarea>
                         </div>
                         <div class="form-group">
-                            <button type="submit" name="add_category" class="btn btn-primary">
+                            <button type="submit" name="add_category" id="categorySubmitButton" class="btn btn-primary">
                                 <i class="fas fa-save"></i>
                                 Save Category
                             </button>
@@ -1379,6 +1697,10 @@ while ($row = $result->fetch_assoc()) {
                                     <td><?php echo htmlspecialchars($category['name']); ?></td>
                                     <td><?php echo htmlspecialchars($category['description'] ? substr($category['description'], 0, 50) . '...' : 'No description'); ?></td>
                                     <td>
+                                        <button class="btn btn-edit" onclick="editCategory(<?php echo htmlspecialchars($category['id']); ?>, '<?php echo htmlspecialchars($category['name']); ?>', '<?php echo htmlspecialchars($category['description']); ?>')">
+                                            <i class="fas fa-edit"></i>
+                                            Edit
+                                        </button>
                                         <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this category?');">
                                             <input type="hidden" name="id" value="<?php echo htmlspecialchars($category['id']); ?>">
                                             <button type="submit" name="delete_category" class="btn btn-danger">
@@ -1398,24 +1720,26 @@ while ($row = $result->fetch_assoc()) {
             <div class="section">
                 <div class="section-header">
                     <h2 class="section-title">Product Management</h2>
-                    <button class="btn" onclick="toggleProductForm()">
+                    <button class="btn btn-primary" onclick="toggleProductForm('add')">
                         <i class="fas fa-plus"></i>
                         Add Product
                     </button>
                 </div>
                 <div id="productForm" style="display: none;">
                     <form class="form" method="POST" id="productFormElement" enctype="multipart/form-data">
+                        <input type="hidden" name="product_id" id="productId">
+                        <input type="hidden" name="existing_image" id="existingImage">
                         <div class="form-group">
                             <label class="form-label">Product Name</label>
-                            <input type="text" class="form-input" name="product_name" required>
+                            <input type="text" class="form-input" name="product_name" id="productName" required>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Price ($)</label>
-                            <input type="number" class="form-input" name="price" step="0.01" min="0" required>
+                            <input type="number" class="form-input" name="price" id="productPrice" step="0.01" min="0" required>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Stock Quantity</label>
-                            <input type="number" class="form-input" name="stock_quantity" min="0" required>
+                            <input type="number" class="form-input" name="stock_quantity" id="productStock" min="0" required>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Category</label>
@@ -1426,7 +1750,7 @@ while ($row = $result->fetch_assoc()) {
                                         <option value="<?php echo htmlspecialchars($category['id']); ?>"><?php echo htmlspecialchars($category['name']); ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <button type="button" class="btn btn-primary" onclick="toggleCategoryForm()">
+                                <button type="button" class="btn btn-primary" onclick="toggleCategoryForm('add')">
                                     <i class="fas fa-plus"></i>
                                     New Category
                                 </button>
@@ -1434,7 +1758,7 @@ while ($row = $result->fetch_assoc()) {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Miscellaneous Attribute</label>
-                            <select class="form-input" name="misc_attribute">
+                            <select class="form-input" name="misc_attribute" id="miscAttribute">
                                 <option value="">None</option>
                                 <option value="new_arrival">New Arrival</option>
                                 <option value="featured">Featured</option>
@@ -1443,18 +1767,19 @@ while ($row = $result->fetch_assoc()) {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Featured Product</label>
-                            <input type="checkbox" name="featured" value="1">
+                            <input type="checkbox" name="featured" id="productFeatured" value="1">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Product Image</label>
-                            <input type="file" class="form-input" name="image" accept="image/*">
+                            <input type="file" class="form-input" name="image" id="productImage" accept="image/*">
+                            <img id="imagePreview" src="" alt="Image Preview" class="product-image" style="display: none; margin-top: 0.5rem;">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Product Description</label>
-                            <textarea class="form-input" name="product_description" rows="5" placeholder="Enter product description"></textarea>
+                            <textarea class="form-input" name="product_description" id="productDescription" rows="5" placeholder="Enter product description"></textarea>
                         </div>
                         <div class="form-group">
-                            <button type="submit" name="add_product" class="btn btn-primary">
+                            <button type="submit" name="add_product" id="productSubmitButton" class="btn btn-primary">
                                 <i class="fas fa-save"></i>
                                 Save Product
                             </button>
@@ -1478,18 +1803,24 @@ while ($row = $result->fetch_assoc()) {
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="productTableBody">
+                                               <tbody id="productTableBody">
                             <?php foreach ($products as $product): ?>
                                 <tr>
-                                    <td><img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="product-image"></td>
+                                    <td>
+                                        <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="product-image">
+                                    </td>
                                     <td><?php echo htmlspecialchars($product['name']); ?></td>
                                     <td>$<?php echo number_format($product['price'], 2); ?></td>
-                                    <td><?php echo htmlspecialchars($product['stock_quantity'] ?? 0); ?></td>
-                                    <td><?php echo htmlspecialchars($product['category'] ?? 'None'); ?></td>
-                                    <td><?php echo htmlspecialchars($product['description'] ? substr($product['description'], 0, 50) . '...' : 'No description'); ?></td>
-                                    <td><?php echo htmlspecialchars($product['misc_attribute'] ? ucwords(str_replace('_', ' ', $product['misc_attribute'])) : 'None'); ?></td>
+                                    <td><?php echo htmlspecialchars($product['stock_quantity']); ?></td>
+                                    <td><?php echo htmlspecialchars($product['category']); ?></td>
+                                    <td><?php echo htmlspecialchars(substr($product['description'], 0, 50) . '...'); ?></td>
+                                    <td><?php echo htmlspecialchars($product['misc_attribute'] ?? 'None'); ?></td>
                                     <td>
-                                        <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this product?');">
+                                        <button class="btn btn-edit" onclick='editProduct(<?php echo json_encode($product, JSON_HEX_QUOT | JSON_HEX_APOS); ?>)'>
+                                            <i class="fas fa-edit"></i>
+                                            Edit
+                                        </button>
+                                        <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this product?');">
                                             <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($product['id']); ?>">
                                             <button type="submit" name="delete_product" class="btn btn-danger">
                                                 <i class="fas fa-trash"></i>
@@ -1510,37 +1841,44 @@ while ($row = $result->fetch_assoc()) {
             <div class="section">
                 <div class="section-header">
                     <h2 class="section-title">Order Management</h2>
-                    <button class="btn btn-secondary" onclick="refreshOrders()">
-                        <i class="fas fa-refresh"></i>
-                        Refresh
+                    <button class="btn btn-primary" onclick="refreshOrders()">
+                        <i class="fas fa-sync-alt"></i>
+                        Refresh Orders
                     </button>
                 </div>
-                <div class="table-container" id="ordersTable">
+                <div class="table-container" id="orderTable">
                     <table>
                         <thead>
                             <tr>
                                 <th>Order ID</th>
-                                <th>Customer</th>
+                                <th>Customer Email</th>
                                 <th>Product</th>
                                 <th>Quantity</th>
                                 <th>Total</th>
                                 <th>Date</th>
                                 <th>Status</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="ordersTableBody">
+                        <tbody id="orderTableBody">
                             <?php foreach ($orders as $order): ?>
                                 <tr>
-                                    <td>#<?php echo htmlspecialchars($order['id']); ?></td>
+                                    <td><?php echo htmlspecialchars($order['id']); ?></td>
                                     <td><?php echo htmlspecialchars($order['email']); ?></td>
                                     <td><?php echo htmlspecialchars($order['product_name']); ?></td>
                                     <td><?php echo htmlspecialchars($order['quantity']); ?></td>
                                     <td>$<?php echo number_format($order['o_total'], 2); ?></td>
-                                    <td><?php echo date('Y-m-d', strtotime($order['order_date'])); ?></td>
+                                    <td><?php echo htmlspecialchars($order['order_date']); ?></td>
                                     <td>
                                         <span class="status-badge status-<?php echo htmlspecialchars(strtolower($order['status'])); ?>">
                                             <?php echo htmlspecialchars($order['status']); ?>
                                         </span>
+                                    </td>
+                                    <td>
+                                        <a href="order-details.php?order_id=<?php echo htmlspecialchars($order['id']); ?>" class="btn btn-primary">
+                                            <i class="fas fa-eye"></i>
+                                            View
+                                        </a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1550,50 +1888,41 @@ while ($row = $result->fetch_assoc()) {
             </div>
         </div>
 
-        <!-- Carousel Management Tab -->
+        <!-- Carousel Tab -->
         <div id="carousel-tab" class="tab-content">
             <div class="section">
                 <div class="section-header">
-                    <h2 class="section-title">Hero Carousel Management</h2>
-                    <button class="btn btn-primary" onclick="toggleCarouselForm()">
-                        <i class="fas fa-plus"></i>
-                        Add Item
-                    </button>
+                    <h2 class="section-title">Carousel Management</h2>
                 </div>
-                <div id="carouselForm" style="display: none;">
-                    <form class="form" method="POST" enctype="multipart/form-data">
-                        <div class="form-group">
-                            <label class="form-label">Title</label>
-                            <input type="text" class="form-input" name="title" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Subtitle</label>
-                            <textarea class="form-input" name="subtitle" rows="3" required></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Link (Optional)</label>
-                            <input type="text" class="form-input" name="link" placeholder="e.g., #products">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Image</label>
-                            <input type="file" class="form-input" name="image" accept="image/*" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Active</label>
-                            <input type="checkbox" name="is_active" value="1" checked>
-                        </div>
-                        <div class="form-group">
-                            <button type="submit" name="add_carousel_image" class="btn btn-primary">
-                                <i class="fas fa-save"></i>
-                                Save Image
-                            </button>
-                            <button type="button" class="btn btn-secondary" onclick="cancelCarouselForm()">
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                </div>
-                <div class="table-container" id="carouselTable">
+                <form class="form" method="POST" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label class="form-label">Title</label>
+                        <input type="text" class="form-input" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Subtitle</label>
+                        <input type="text" class="form-input" name="subtitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Link</label>
+                        <input type="url" class="form-input" name="link" placeholder="https://">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Image</label>
+                        <input type="file" class="form-input" name="image" accept="image/*" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Active</label>
+                        <input type="checkbox" name="is_active" value="1" checked>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" name="add_carousel_image" class="btn btn-primary">
+                            <i class="fas fa-plus"></i>
+                            Add Image
+                        </button>
+                    </div>
+                </form>
+                <div class="table-container">
                     <table>
                         <thead>
                             <tr>
@@ -1602,28 +1931,29 @@ while ($row = $result->fetch_assoc()) {
                                 <th>Subtitle</th>
                                 <th>Link</th>
                                 <th>Active</th>
+                                <th>Created At</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="carouselTableBody">
+                        <tbody>
                             <?php foreach ($carousel_images as $image): ?>
                                 <tr>
-                                    <td><img src="<?php echo htmlspecialchars($image['image']); ?>" alt="<?php echo htmlspecialchars($image['title']); ?>" class="product-image"></td>
-                                    <td><?php echo htmlspecialchars($image['title']); ?></td>
-                                    <td><?php echo htmlspecialchars(substr($image['subtitle'], 0, 50)) . (strlen($image['subtitle']) > 50 ? '...' : ''); ?></td>
-                                    <td><?php echo htmlspecialchars($image['link'] ?: 'None'); ?></td>
                                     <td>
-                                        <form method="POST" style="display: inline;">
+                                        <img src="<?php echo htmlspecialchars($image['image']); ?>" alt="<?php echo htmlspecialchars($image['title']); ?>" class="product-image">
+                                    </td>
+                                    <td><?php echo htmlspecialchars($image['title']); ?></td>
+                                    <td><?php echo htmlspecialchars($image['subtitle']); ?></td>
+                                    <td><?php echo htmlspecialchars($image['link'] ?: 'N/A'); ?></td>
+                                    <td>
+                                        <form method="POST">
                                             <input type="hidden" name="image_id" value="<?php echo htmlspecialchars($image['id']); ?>">
-                                            <input type="hidden" name="is_active" value="<?php echo ($image['is_active'] ? 0 : 1); ?>">
-                                            <button type="submit" name="toggle_carousel_image" class="btn btn-secondary">
-                                                <i class="fas fa-<?php echo ($image['is_active'] ? 'check' : 'times'); ?>"></i>
-                                                <?php echo ($image['is_active'] ? 'Deactivate' : 'Activate'); ?>
-                                            </button>
+                                            <input type="checkbox" name="is_active" value="1" <?php echo $image['is_active'] ? 'checked' : ''; ?> onchange="this.form.submit()">
+                                            <input type="hidden" name="toggle_carousel_image" value="1">
                                         </form>
                                     </td>
+                                    <td><?php echo htmlspecialchars($image['created_at']); ?></td>
                                     <td>
-                                        <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this item?');">
+                                        <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this carousel image?');">
                                             <input type="hidden" name="image_id" value="<?php echo htmlspecialchars($image['id']); ?>">
                                             <button type="submit" name="delete_carousel_image" class="btn btn-danger">
                                                 <i class="fas fa-trash"></i>
@@ -1639,7 +1969,90 @@ while ($row = $result->fetch_assoc()) {
             </div>
         </div>
 
-        <!-- Security Settings Tab -->
+        <!-- Delivery Fees Tab -->
+        <div id="delivery_fees-tab" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title">Delivery Fees Management</h2>
+                    <button class="btn btn-primary" onclick="refreshDeliveryFees()">
+                        <i class="fas fa-sync-alt"></i>
+                        Refresh Delivery Fees
+                    </button>
+                </div>
+                <form class="form" method="POST" id="deliveryFeeForm">
+                    <input type="hidden" name="id" id="deliveryFeeId">
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-input" name="name" id="deliveryFeeName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Fee ($)</label>
+                        <input type="number" class="form-input" name="fee" id="deliveryFeeAmount" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Minimum Order Amount ($)</label>
+                        <input type="number" class="form-input" name="min_order_amount" id="deliveryFeeMinOrder" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-input" name="description" id="deliveryFeeDescription" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Active</label>
+                        <input type="checkbox" name="is_active" id="deliveryFeeActive" value="1" checked>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" name="add_delivery_fee" id="deliveryFeeSubmitButton" class="btn btn-primary">
+                            <i class="fas fa-save"></i>
+                            Save Delivery Fee
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="resetDeliveryFeeForm()">Cancel</button>
+                    </div>
+                </form>
+                <div class="table-container" id="deliveryFeeTable">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Fee</th>
+                                <th>Min Order</th>
+                                <th>Description</th>
+                                <th>Active</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deliveryFeeTableBody">
+                            <?php foreach ($delivery_fees as $fee): ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($fee['id']); ?></td>
+                                    <td><?php echo htmlspecialchars($fee['name']); ?></td>
+                                    <td>$<?php echo number_format($fee['fee'], 2); ?></td>
+                                    <td><?php echo $fee['min_order_amount'] ? '$' . number_format($fee['min_order_amount'], 2) : 'N/A'; ?></td>
+                                    <td><?php echo htmlspecialchars($fee['description'] ?: 'N/A'); ?></td>
+                                    <td><?php echo $fee['is_active'] ? 'Yes' : 'No'; ?></td>
+                                    <td>
+                                        <button class="btn btn-edit" onclick="editDeliveryFee(<?php echo htmlspecialchars(json_encode($fee, JSON_HEX_QUOT | JSON_HEX_APOS)); ?>)">
+                                            <i class="fas fa-edit"></i>
+                                            Edit
+                                        </button>
+                                        <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this delivery fee?');">
+                                            <input type="hidden" name="id" value="<?php echo htmlspecialchars($fee['id']); ?>">
+                                            <button type="submit" name="delete_delivery_fee" class="btn btn-danger">
+                                                <i class="fas fa-trash"></i>
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Tab -->
         <div id="security-tab" class="tab-content">
             <div class="section">
                 <div class="section-header">
@@ -1668,7 +2081,7 @@ while ($row = $result->fetch_assoc()) {
                         <input type="password" class="form-input" name="new_password" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Confirm Password</label>
+                        <label class="form-label">Confirm New Password</label>
                         <input type="password" class="form-input" name="confirm_password" required>
                     </div>
                     <div class="form-group">
@@ -1678,388 +2091,322 @@ while ($row = $result->fetch_assoc()) {
                         </button>
                     </div>
                 </form>
-                <p class="dashboard-subtitle">Note: Additional security features like Two-Factor Authentication (2FA) and audit logs will be added in future updates.</p>
             </div>
         </div>
     </div>
 
+    <!-- JavaScript -->
     <script>
-        // Theme Management
-        function toggleTheme() {
-            const body = document.body;
-            const savedTheme = body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-            body.setAttribute('data-theme', savedTheme);
-            localStorage.setItem('theme', savedTheme);
-        }
-
-        function initTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            document.body.setAttribute('data-theme', savedTheme);
-        }
-
         // Tab Switching
-        function switchTab(tabId) {
-            console.log('Switching to tab:', tabId);
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
-            document.getElementById(`${tabId}-tab`).classList.add('active');
-            if (tabId === 'overview') {
-                initChart();
-            }
-        }
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
 
-        // Initialize Chart
-        function initChart() {
-            try {
-                if (window.salesChartInstance) window.salesChartInstance.destroy();
-                if (window.categoryChartInstance) window.categoryChartInstance.destroy();
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
 
-                const salesCtx = document.getElementById('salesChart').getContext('2d');
-                window.salesChartInstance = new Chart(salesCtx, {
-                    type: 'line',
-                    data: {
-                        labels: <?php echo json_encode($sales_data['labels']); ?>,
-                        datasets: [{
-                            label: 'Sales',
-                            data: <?php echo json_encode($sales_data['totals']); ?>,
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                grid: { color: 'rgba(0,0,0,0.1)' }
-                            },
-                            x: {
-                                grid: { display: false }
-                            }
-                        }
-                    }
-                });
-
-                const categoryCtx = document.getElementById('categoryChart').getContext('2d');
-                window.categoryChartInstance = new Chart(categoryCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: <?php echo json_encode(array_keys($category_data)); ?>,
-                        datasets: [{
-                            data: <?php echo json_encode(array_values($category_data)); ?>,
-                            backgroundColor: [
-                                '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'
-                            ]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'bottom' }
-                        }
-                    }
-                });
-            } catch (error) {
-                console.error('Chart initialization error:', error);
-            }
-        }
-
-        // Search Products
-        function searchProducts() {
-            console.log('Searching products...');
-            const searchInput = document.getElementById('searchInput');
-            const search = searchInput.value.trim();
-            const tbody = document.getElementById('productTableBody');
-            const tableContainer = document.getElementById('productTable');
-
-            tableContainer.classList.add('loading');
-
-            fetch(window.location.href, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `action=search_products&search=${encodeURIComponent(search)}`
-            })
-            .then(response => response.json())
-            .then(products => {
-                tbody.innerHTML = '';
-                if (products.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No products found.</td></tr>';
-                } else {
-                    products.forEach(product => {
-                        const row = `
-                            <tr>
-                                <td><img src="${product.image}" alt="${product.name}" class="product-image"></td>
-                                <td>${product.name}</td>
-                                <td>$${parseFloat(product.price).toFixed(2)}</td>
-                                <td>${product.stock_quantity || 0}</td>
-                                <td>${product.category || 'None'}</td>
-                                <td>${product.description ? product.description.substring(0, 50) + (product.description.length > 50 ? '...' : '') : 'No description'}</td>
-                                <td>${product.misc_attribute ? product.misc_attribute.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'None'}</td>
-                                <td>
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this product?');">
-                                        <input type="hidden" name="product_id" value="${product.id}">
-                                        <button type="submit" name="delete_product" class="btn btn-danger">
-                                            <i class="fas fa-trash"></i>
-                                            Delete
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                        `;
-                        tbody.innerHTML += row;
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Search error:', error);
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Error loading products.</td></tr>';
-            })
-            .finally(() => {
-                tableContainer.classList.remove('loading');
+                tab.classList.add('active');
+                document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
             });
-        }
-
-        // Real-time search
-        let searchDebounceTimeout;
-        const searchInput = document.getElementById('searchInput');
-        searchInput.addEventListener('input', () => {
-            clearTimeout(searchDebounceTimeout);
-            searchDebounceTimeout = setTimeout(() => {
-                searchProducts();
-                switchTab('products');
-            }, 500);
         });
 
-        // Toggle Forms
-        function toggleCategoryForm() {
-            const form = document.getElementById('categoryForm');
-            form.style.display = form.style.display === 'none' ? 'block' : 'none';
-            if (form.style.display === 'none') {
-                form.querySelector('form').reset();
-            } else {
-                refreshCategories();
-            }
-        }
-
-        function cancelCategoryForm() {
-            toggleCategoryForm();
-            refreshCategories();
-        }
-
-        function toggleProductForm() {
-            const form = document.getElementById('productForm');
-            form.style.display = form.style.display === 'none' ? 'block' : 'none';
-            if (form.style.display === 'block') {
-                form.querySelector('form').reset();
-            }
-        }
-
-        function cancelProductForm() {
-            toggleProductForm();
-        }
-
-        function toggleCarouselForm() {
-            const form = document.getElementById('carouselForm');
-            form.style.display = form.style.display === 'none' ? 'block' : 'none';
-            if (form.style.display === 'block') {
-                form.querySelector('form').reset();
-            }
-        }
-
-        function cancelCarouselForm() {
-            toggleCarouselForm();
-        }
-
-        // Refresh Orders
-        function refreshOrders() {
-            console.log('Refreshing orders...');
-            const tableBody = document.getElementById('ordersTableBody');
-            const tableContainer = document.getElementById('ordersTable');
-            tableContainer.classList.add('loading');
-
-            fetch(window.location.href, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'action=fetch_orders'
-            })
-            .then(response => response.json())
-            .then(orders => {
-                tableBody.innerHTML = '';
-                if (orders.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No orders found.</td></tr>';
-                } else {
-                    orders.forEach(order => {
-                        const row = `
-                            <tr>
-                                <td>#${order.id}</td>
-                                <td>${order.email}</td>
-                                <td>${order.product_name}</td>
-                                <td>${order.quantity}</td>
-                                <td>$${parseFloat(order.total).toFixed(2)}</td>
-                                <td>${new Date(order.order_date).toISOString().split('T')[0]}</td>
-                                <td>
-                                    <span class="status-badge status-${order.status.toLowerCase()}">
-                                        ${order.status}
-                                    </span>
-                                </td>
-                            </tr>
-                        `;
-                        tableBody.innerHTML += row;
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Orders refresh error:', error);
-                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Error loading orders.</td></tr>';
-            })
-            .finally(() => {
-                tableContainer.classList.remove('loading');
-            });
-        }
-
-        // Refresh Categories
-        function refreshCategories() {
-            console.log('Refreshing categories...');
-            const tableBody = document.getElementById('categoryTableBody');
-            const select = document.getElementById('categorySelect');
-            const tableContainer = document.getElementById('categoryTable');
-
-            tableContainer.classList.add('loading');
-
-            fetch(window.location.href, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'action=fetch_categories'
-            })
-            .then(response => response.json())
-            .then(categories => {
-                // Update table
-                tableBody.innerHTML = '';
-                if (categories.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No categories found.</td></tr>';
-                } else {
-                    categories.forEach(category => {
-                        const row = `
-                            <tr>
-                                <td>${category.id}</td>
-                                <td>${category.name}</td>
-                                <td>${category.description ? category.description.substring(0, 50) + (category.description.length > 50 ? '...' : '') : 'No description'}</td>
-                                <td>
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this category?');">
-                                        <input type="hidden" name="id" value="${category.id}">
-                                        <button type="submit" name="delete_category" class="btn btn-danger">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                        `;
-                        tableBody.innerHTML += row;
-                    });
-                }
-
-                // Update select dropdown
-                select.innerHTML = '<option value="">Select Category</option>';
-                categories.forEach(category => {
-                    select.innerHTML += `<option value="${category.id}">${category.name}</option>`;
-                });
-            })
-            .catch(error => {
-                console.error('Categories refresh error:', error);
-                tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Error loading categories.</td></tr>';
-            })
-            .finally(() => {
-                tableContainer.classList.remove('loading');
-            });
-        }
-
-        // Dismiss Alert
-        function dismissAlert(element) {
-            const alert = element.closest('.alert');
-            alert.style.opacity = '0';
-            setTimeout(() => alert.remove(), 300);
-        }
-
-        // Toggle Profile Dropdown
+        // Profile Dropdown
         function toggleProfileDropdown() {
             const dropdown = document.getElementById('profileDropdown');
             dropdown.classList.toggle('show');
         }
 
         // Close dropdown when clicking outside
-        document.addEventListener('click', (event) => {
-            const dropdown = document.getElementById('profileDropdown');
-            const trigger = document.querySelector('.profile-trigger');
-            if (!trigger.contains(event.target) && !dropdown.contains(event.target)) {
+        window.addEventListener('click', (event) => {
+            if (!event.target.closest('.profile-dropdown')) {
+                const dropdown = document.getElementById('profileDropdown');
                 dropdown.classList.remove('show');
             }
         });
 
-        // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    initTheme();
-    switchTab('overview'); // Default to overview tab
-    initChart(); // Initialize charts for overview tab
+        // Search Products
+        function searchProducts() {
+            const searchInput = document.getElementById('searchInput').value.trim();
+            if (searchInput.length > 2) {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', 'admin.php', true);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
+                        const products = JSON.parse(xhr.responseText);
+                        const productTableBody = document.getElementById('productTableBody');
+                        productTableBody.innerHTML = '';
+                        products.forEach(product => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td><img src="${product.image}" alt="${product.name}" class="product-image"></td>
+                                <td>${product.name}</td>
+                                <td>$${parseFloat(product.price).toFixed(2)}</td>
+                                <td>${product.stock_quantity}</td>
+                                <td>${product.category}</td>
+                                <td>${product.description.substring(0, 50)}...</td>
+                                <td>${product.misc_attribute || 'None'}</td>
+                                <td>
+                                    <button class="btn btn-edit" onclick='editProduct(${JSON.stringify(product)})'>Edit</button>
+                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this product?');">
+                                        <input type="hidden" name="product_id" value="${product.id}">
+                                        <button type="submit" name="delete_product" class="btn btn-danger">Delete</button>
+                                    </form>
+                                </td>
+                            `;
+                            productTableBody.appendChild(row);
+                        });
+                    }
+                };
+                xhr.send(`action=search_products&search=${encodeURIComponent(searchInput)}`);
+            }
+        }
 
-    // Add event listeners for tabs
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            const tabId = tab.getAttribute('data-tab');
-            switchTab(tabId);
-        });
-    });
+        // Dismiss Alerts
+        function dismissAlert(element) {
+            element.parentElement.style.opacity = '0';
+            setTimeout(() => element.parentElement.remove(), 300);
+        }
 
-    // Initialize search input if needed
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                searchProducts();
-                switchTab('products');
+        // Category Form Handling
+        function toggleCategoryForm(mode) {
+            const form = document.getElementById('categoryForm');
+            const formElement = document.getElementById('categoryFormElement');
+            const submitButton = document.getElementById('categorySubmitButton');
+            const categoryId = document.getElementById('categoryId');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+            if (mode === 'add') {
+                formElement.reset();
+                categoryId.value = '';
+                submitButton.setAttribute('name', 'add_category');
+                submitButton.textContent = 'Save Category';
+            }
+        }
+
+        function editCategory(id, name, description) {
+            toggleCategoryForm('edit');
+            document.getElementById('categoryId').value = id;
+            document.getElementById('categoryName').value = name;
+            document.getElementById('categoryDescription').value = description;
+            document.getElementById('categorySubmitButton').setAttribute('name', 'edit_category');
+            document.getElementById('categorySubmitButton').textContent = 'Update Category';
+        }
+
+        function cancelCategoryForm() {
+            document.getElementById('categoryForm').style.display = 'none';
+            document.getElementById('categoryFormElement').reset();
+            document.getElementById('categoryId').value = '';
+            document.getElementById('categorySubmitButton').setAttribute('name', 'add_category');
+            document.getElementById('categorySubmitButton').textContent = 'Save Category';
+        }
+
+        // Product Form Handling
+        function toggleProductForm(mode) {
+            const form = document.getElementById('productForm');
+            const formElement = document.getElementById('productFormElement');
+            const submitButton = document.getElementById('productSubmitButton');
+            const productId = document.getElementById('productId');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+            if (mode === 'add') {
+                formElement.reset();
+                productId.value = '';
+                document.getElementById('imagePreview').style.display = 'none';
+                submitButton.setAttribute('name', 'add_product');
+                submitButton.textContent = 'Save Product';
+            }
+        }
+
+        function editProduct(product) {
+            toggleProductForm('edit');
+            document.getElementById('productId').value = product.id;
+            document.getElementById('productName').value = product.name;
+            document.getElementById('productPrice').value = product.price;
+            document.getElementById('productStock').value = product.stock_quantity;
+            document.getElementById('categorySelect').value = product.category_id || '';
+            document.getElementById('miscAttribute').value = product.misc_attribute || '';
+            document.getElementById('productFeatured').checked = product.featured == 1;
+            document.getElementById('productDescription').value = product.description;
+            document.getElementById('existingImage').value = product.image;
+            document.getElementById('imagePreview').src = product.image;
+            document.getElementById('imagePreview').style.display = 'block';
+            document.getElementById('productSubmitButton').setAttribute('name', 'edit_product');
+            document.getElementById('productSubmitButton').textContent = 'Update Product';
+        }
+
+        function cancelProductForm() {
+            document.getElementById('productForm').style.display = 'none';
+            document.getElementById('productFormElement').reset();
+            document.getElementById('productId').value = '';
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('productSubmitButton').setAttribute('name', 'add_product');
+            document.getElementById('productSubmitButton').textContent = 'Save Product';
+        }
+
+        // Delivery Fee Form Handling
+        function editDeliveryFee(fee) {
+            document.getElementById('deliveryFeeId').value = fee.id;
+            document.getElementById('deliveryFeeName').value = fee.name;
+            document.getElementById('deliveryFeeAmount').value = fee.fee;
+            document.getElementById('deliveryFeeMinOrder').value = fee.min_order_amount || '';
+            document.getElementById('deliveryFeeDescription').value = fee.description || '';
+            document.getElementById('deliveryFeeActive').checked = fee.is_active == 1;
+            document.getElementById('deliveryFeeSubmitButton').setAttribute('name', 'edit_delivery_fee');
+            document.getElementById('deliveryFeeSubmitButton').textContent = 'Update Delivery Fee';
+        }
+
+        function resetDeliveryFeeForm() {
+            document.getElementById('deliveryFeeForm').reset();
+            document.getElementById('deliveryFeeId').value = '';
+            document.getElementById('deliveryFeeSubmitButton').setAttribute('name', 'add_delivery_fee');
+            document.getElementById('deliveryFeeSubmitButton').textContent = 'Save Delivery Fee';
+        }
+
+        // Image Preview
+        document.getElementById('productImage').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    document.getElementById('imagePreview').src = e.target.result;
+                    document.getElementById('imagePreview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
             }
         });
-    }
 
-    // Refresh categories on load to ensure dropdown is populated
-    refreshCategories();
+        // Refresh Orders
+        function refreshOrders() {
+            const tableContainer = document.getElementById('orderTable');
+            tableContainer.classList.add('loading');
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'admin.php', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    const orders = JSON.parse(xhr.responseText);
+                    const orderTableBody = document.getElementById('orderTableBody');
+                    orderTableBody.innerHTML = '';
+                    orders.forEach(order => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${order.id}</td>
+                            <td>${order.email}</td>
+                            <td>${order.product_name}</td>
+                            <td>${order.quantity}</td>
+                            <td>$${parseFloat(order.o_total).toFixed(2)}</td>
+                            <td>${order.order_date}</td>
+                            <td><span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span></td>
+                            <td>
+                                <a href="order-details.php?order_id=${order.id}" class="btn btn-primary">View</a>
+                            </td>
+                        `;
+                        orderTableBody.appendChild(row);
+                    });
+                    tableContainer.classList.remove('loading');
+                }
+            };
+            xhr.send('action=fetch_orders');
+        }
 
-    // Handle form submissions with loading state
-    const forms = document.querySelectorAll('form');
-    forms.forEach(form => {
-        form.addEventListener('submit', (e) => {
-            const submitButton = form.querySelector('button[type="submit"]');
-            if (submitButton) {
-                submitButton.disabled = true;
-                submitButton.innerHTML = '<span class="loading"></span> Processing...';
-                setTimeout(() => {
-                    submitButton.disabled = false;
-                    submitButton.innerHTML = submitButton.getAttribute('data-original-text') || submitButton.innerHTML;
-                }, 2000); // Simulate processing (remove in production with actual async handling)
+        // Refresh Delivery Fees
+        function refreshDeliveryFees() {
+            const tableContainer = document.getElementById('deliveryFeeTable');
+            tableContainer.classList.add('loading');
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'admin.php', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    const fees = JSON.parse(xhr.responseText);
+                    const feeTableBody = document.getElementById('deliveryFeeTableBody');
+                    feeTableBody.innerHTML = '';
+                    fees.forEach(fee => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${fee.id}</td>
+                            <td>${fee.name}</td>
+                            <td>$${parseFloat(fee.fee).toFixed(2)}</td>
+                            <td>${fee.min_order_amount ? '$' + parseFloat(fee.min_order_amount).toFixed(2) : 'N/A'}</td>
+                            <td>${fee.description || 'N/A'}</td>
+                            <td>${fee.is_active == 1 ? 'Yes' : 'No'}</td>
+                            <td>
+                                <button class="btn btn-edit" onclick='editDeliveryFee(${JSON.stringify(fee)})'>Edit</button>
+                                <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this delivery fee?');">
+                                    <input type="hidden" name="id" value="${fee.id}">
+                                    <button type="submit" name="delete_delivery_fee" class="btn btn-danger">Delete</button>
+                                </form>
+                            </td>
+                        `;
+                        feeTableBody.appendChild(row);
+                    });
+                    tableContainer.classList.remove('loading');
+                }
+            };
+            xhr.send('action=fetch_delivery_fees');
+        }
+
+        // Sales Chart
+        const salesCtx = document.getElementById('salesChart').getContext('2d');
+        new Chart(salesCtx, {
+            type: 'line',
+            data: {
+                labels: <?php echo json_encode($sales_data['labels']); ?>,
+                datasets: [{
+                    label: 'Sales ($)',
+                    data: <?php echo json_encode($sales_data['totals']); ?>,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: false },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#e2e8f0' },
+                        ticks: { color: '#64748b' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#64748b' }
+                    }
+                }
             }
         });
-    });
 
-    // Store original button text for restoration
-    document.querySelectorAll('button[type="submit"]').forEach(button => {
-        button.setAttribute('data-original-text', button.innerHTML);
-    });
-
-    // Handle window resize for responsive charts
-    window.addEventListener('resize', () => {
-        if (window.salesChartInstance) window.salesChartInstance.resize();
-        if (window.categoryChartInstance) window.categoryChartInstance.resize();
-    });
-
-    console.log('Admin panel initialized');
-});
-</script>
+        // Category Chart
+        const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+        new Chart(categoryCtx, {
+            type: 'doughnut',
+            data: {
+                labels: <?php echo json_encode(array_keys($category_data)); ?>,
+                datasets: [{
+                    data: <?php echo json_encode(array_values($category_data)); ?>,
+                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#64748b' }
+                    },
+                    title: { display: false }
+                }
+            }
+        });
+    </script>
 </body>
 </html>
+<?php
+$conn->close();
+?>

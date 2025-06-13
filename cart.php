@@ -718,26 +718,58 @@ $cart_count = getCartCount($conn, $user);
             lastScrollTop = currentScroll <= 0 ? 0 : currentScroll; // For mobile or negative scrolling
         });
 
+<script src="utils.js"></script>
+<script src="hamburger.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Toggle profile dropdown
+        function toggleProfileDropdown() {
+            const dropdown = document.getElementById('profileDropdown');
+            if (dropdown) {
+                dropdown.classList.toggle('show');
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const profileDropdown = document.querySelector('.profile-dropdown');
+            const dropdown = document.getElementById('profileDropdown');
+            if (profileDropdown && dropdown && !profileDropdown.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        // Ensure the toggle function is globally available
+        window.toggleProfileDropdown = toggleProfileDropdown;
+
+        // Navbar scroll hide/show functionality
+        let lastScrollTop = 0;
+        const navbar = document.getElementById('navbar');
+        const scrollThreshold = 100; // Start hiding after 100px of scroll
+        if (navbar) {
+            window.addEventListener('scroll', function() {
+                const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+                if (currentScroll < scrollThreshold) {
+                    navbar.classList.remove('navbar-hidden');
+                    navbar.classList.add('navbar-visible');
+                    return;
+                }
+                if (currentScroll > lastScrollTop && currentScroll > scrollThreshold) {
+                    navbar.classList.add('navbar-hidden');
+                    navbar.classList.remove('navbar-visible');
+                } else if (currentScroll < lastScrollTop) {
+                    navbar.classList.remove('navbar-hidden');
+                    navbar.classList.add('navbar-visible');
+                }
+                lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+            });
+        }
+
         // Search products
         function searchProducts() {
             const search = document.getElementById('searchInput').value;
             window.location.href = `index.php?search=${encodeURIComponent(search)}`;
         }
-
-        // Toggle profile dropdown
-        function toggleProfileDropdown() {
-            const dropdown = document.getElementById('profileDropdown');
-            dropdown.classList.toggle('show');
-        }
-        
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
-            const profileDropdown = document.querySelector('.profile-dropdown');
-            const dropdown = document.getElementById('profileDropdown');
-            if (!profileDropdown.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
 
         // Update cart quantity via AJAX
         function updateQuantity(event, productId, quantity) {
@@ -760,18 +792,8 @@ $cart_count = getCartCount($conn, $user);
                 }).then(() => window.location.reload());
             }
         }
-
-        // Add some content for demonstration (remove this in production)
-        window.addEventListener('DOMContentLoaded', function() {
-            // Add some placeholder content to make the page scrollable for testing
-            const main = document.querySelector('main');
-            const demoContent = document.createElement('div');
-            demoContent.style.cssText = 'height: 200vh; background: linear-gradient(to bottom, #f8fafc, #e2e8f0); margin-top: 2rem; padding: 2rem; text-align: center; color: #666;';
-            demoContent.innerHTML = '<h3>Scroll down to see the navbar hide!</h3><p>Scroll back up to see it appear again.</p>';
-            // Uncomment the line below to add demo content
-            // main.appendChild(demoContent);
-        });
-    </script>
+    });
+</script>
 </body>
 </html>
 <?php

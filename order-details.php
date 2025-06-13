@@ -16,16 +16,19 @@ if (isset($_SESSION['user_id'])) {
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();
     $stmt->close();
+} else {
+    header("Location: login.php");
+    exit;
 }
 
-
-
-// Get cart count
+// Get cart count (assumed defined in config.php)
 $cart_count = getCartCount($conn, $user);
+
+// Get order ID from URL
+$order_id = isset($_GET['id']) && is_numeric($_GET['id']) ? (int)$_GET['id'] : 0;
 
 // Handle order cancellation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order']) && $user) {
-    $order_id = (int)$_POST['order_id'];
     $stmt = $conn->prepare("UPDATE orders SET status = 'cancelled' WHERE id = ? AND user_id = ? AND status IN ('pending', 'processing')");
     $stmt->bind_param("ii", $order_id, $user['id']);
     if ($stmt->execute() && $stmt->affected_rows > 0) {
@@ -34,86 +37,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order']) && $u
         $_SESSION['message'] = ['type' => 'error', 'text' => 'Failed to cancel order. It may have already been shipped or delivered.'];
     }
     $stmt->close();
-    header("Location: orders.php");
+    header("Location: order_details.php?id=$order_id");
     exit;
 }
 
-// Handle filters
-$status_filter = $_GET['status'] ?? '';
-$date_filter = $_GET['date'] ?? '';
-$where_clauses = [];
-$params = [];
-$types = '';
+// Fetch order details
+$order = null;
+$address = null;
+$payment = null;
+$items = [];
+if ($order_id > 0) {
+    // Get order
+    $stmt = $conn->prepare("SELECT o.id, o.total, o.delivery_fee, o.status, o.created_at, o.address_id, o.payment_id 
+                            FROM orders o 
+                            WHERE o.id = ? AND o.user_id = ?");
+    $stmt->bind_param("ii", $order_id, $user['id']);
+    $stmt->execute();
+    $order = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
-if ($status_filter && in_array($status_filter, ['pending', 'processing', 'shipped', 'delivered', 'cancelled'])) {
-    $where_clauses[] = "o.status = ?";
-    $params[] = $status_filter;
-    $types .= 's';
+    if ($order) {
+        // Get address
+        $stmt = $conn->prepare("SELECT full_name, street_address, city, state, country, postal_code, phone 
+                                FROM addresses 
+                                WHERE id = ?");
+        $stmt->bind_param("i", $order['address_id']);
+        $stmt->execute();
+        $address = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        // Get payment (if exists)
+        if ($order['payment_id']) {
+            $stmt = $conn->prepare("SELECT amount, payment_method, payment_status, transaction_id 
+                                    FROM payments 
+                                    WHERE id = ?");
+            $stmt->bind_param("i", $order['payment_id']);
+            $stmt->execute();
+            $payment = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+        }
+
+        // Get order items
+        $stmt = $conn->prepare("SELECT p.name, p.sku, p.image, oi.quantity, oi.price 
+                                FROM order_items oi 
+                                JOIN products p ON oi.product_id = p.id 
+                                WHERE oi.order_id = ?");
+        $stmt->bind_param("i", $order_id);
+        $stmt->execute();
+        $items_result = $stmt->get_result();
+        while ($item = $items_result->fetch_assoc()) {
+            $items[] = $item;
+        }
+        $stmt->close();
+    }
 }
 
-if ($date_filter) {
-    $date_filter = filter_var($date_filter, FILTER_SANITIZE_STRING);
-    $where_clauses[] = "DATE(o.created_at) = ?";
-    $params[] = $date_filter;
-    $types .= 's';
-}
-
-// Pagination
-$per_page = 10;
-$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
-$offset = ($page - 1) * $per_page;
-
-$query = "SELECT o.id, o.total, o.status, o.created_at, COUNT(oi.id) as item_count 
-          FROM orders o 
-          LEFT JOIN order_items oi ON o.id = oi.order_id 
-          WHERE o.user_id = ?";
-$params[] = $user['id'];
-$types .= 'i';
-
-if ($where_clauses) {
-    $query .= " AND " . implode(" AND ", $where_clauses);
-}
-
-$query .= " GROUP BY o.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?";
-$params[] = $per_page;
-$params[] = $offset;
-$types .= 'ii';
-
-$stmt = $conn->prepare($query);
-$stmt->bind_param($types, ...$params);
-$stmt->execute();
-$orders = $stmt->get_result();
-
-$count_query = "SELECT COUNT(DISTINCT o.id) as total 
-                FROM orders o 
-                WHERE o.user_id = ?";
-$count_params = [$user['id']];
-$count_types = 'i';
-
-if ($where_clauses) {
-    $count_query .= " AND " . implode(" AND ", $where_clauses);
-    $count_params = array_merge($count_params, array_slice($params, 0, -2));
-    $count_types .= substr($types, 0, -2);
-}
-
-$stmt = $conn->prepare($count_query);
-$stmt->bind_param($count_types, ...$count_params);
-$stmt->execute();
-$total_orders = $stmt->get_result()->fetch_assoc()['total'];
-$total_pages = ceil($total_orders / $per_page);
-
-// Summary stats
-$stats_query = "SELECT status, COUNT(*) as count 
-                FROM orders 
-                WHERE user_id = ? 
-                GROUP BY status";
-$stmt = $conn->prepare($stats_query);
-$stmt->bind_param("i", $user['id']);
-$stmt->execute();
-$stats_result = $stmt->get_result();
-$stats = ['pending' => 0, 'processing' => 0, 'shipped' => 0, 'delivered' => 0, 'cancelled' => 0];
-while ($row = $stats_result->fetch_assoc()) {
-    $stats[$row['status']] = $row['count'];
+if (!$order) {
+    $_SESSION['message'] = ['type' => 'error', 'text' => 'Order not found or you do not have permission to view it.'];
+    header("Location: orders.php");
+    exit;
 }
 ?>
 
@@ -122,7 +104,7 @@ while ($row = $stats_result->fetch_assoc()) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Orders - Deeken</title>
+    <title>Order Details - Deeken</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="responsive.css">
@@ -144,7 +126,7 @@ while ($row = $stats_result->fetch_assoc()) {
             padding-top: 80px;
         }
 
-        /* Navigation Styles (from cart.php) */
+        /* Navigation Styles (from orders.php, copied from cart.php) */
         .navbar {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -414,7 +396,7 @@ while ($row = $stats_result->fetch_assoc()) {
             }
         }
 
-        /* Existing orders.php styles (unchanged) */
+        /* Existing styles from orders.php */
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -456,119 +438,13 @@ while ($row = $stats_result->fetch_assoc()) {
             border: 1px solid #f5c6cb;
         }
 
-        .filters-section {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            margin-bottom: 2rem;
-        }
-
-        .filters-title {
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            color: #333;
-        }
-
-        .filters-row {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .filter-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .filter-group label {
-            font-size: 0.9rem;
-            font-weight: 500;
-            color: #555;
-        }
-
-        .filter-group select {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-family: 'Poppins', sans-serif;
-            font-size: 0.9rem;
-            background: white;
-        }
-
-        .filter-btn {
-            background: #2A2AFF;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: 'Poppins', sans-serif;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            margin-top: 1.5rem;
-        }
-
-        .filter-btn:hover {
-            background: #1a1aff;
-            transform: translateY(-1px);
-        }
-
-        .orders-summary {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            margin-bottom: 2rem;
-        }
-
-        .summary-title {
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            color: #333;
-        }
-
-        .summary-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-
-        .stat-card {
-            text-align: center;
-            padding: 1rem;
-            border-radius: 8px;
-            background: #f8f9fa;
-        }
-
-        .stat-number {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #2A2AFF;
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            color: #666;
-            margin-top: 0.5rem;
-        }
-
-        .orders-list {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
         .order-card {
             background: white;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
             overflow: hidden;
             transition: all 0.3s ease;
+            margin-bottom: 2rem;
         }
 
         .order-card:hover {
@@ -760,67 +636,28 @@ while ($row = $stats_result->fetch_assoc()) {
             transform: translateY(-1px);
         }
 
-        .btn-outline {
-            background: transparent;
-            color: #2A2AFF;
-            border: 1px solid #2A2AFF;
+        .address-section, .payment-section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
         }
 
-        .btn-outline:hover {
-            background: #2A2AFF;
-            color: white;
-        }
-
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 0.5rem;
-            margin-top: 2rem;
-        }
-
-        .pagination a,
-        .pagination span {
-            padding: 8px 12px;
-            text-decoration: none;
-            color: #2A2AFF;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-        }
-
-        .pagination a:hover {
-            background: #2A2AFF;
-            color: white;
-        }
-
-        .pagination .current {
-            background: #2A2AFF;
-            color: white;
-            border-color: #2A2AFF;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: #666;
-        }
-
-        .empty-state i {
-            font-size: 4rem;
-            color: #ddd;
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
             margin-bottom: 1rem;
-        }
-
-        .empty-state h3 {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
             color: #333;
         }
 
-        .empty-state p {
-            font-size: 1rem;
-            margin-bottom: 1.5rem;
+        .address-details, .payment-details {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .address-details p, .payment-details p {
+            margin-bottom: 0.5rem;
         }
 
         .footer {
@@ -974,8 +811,8 @@ while ($row = $stats_result->fetch_assoc()) {
     <main>
         <div class="container">
             <div class="page-header">
-                <h1 class="page-title">My Orders</h1>
-                <p class="page-subtitle">Track and manage your orders</p>
+                <h1 class="page-title">Order Details</h1>
+                <p class="page-subtitle">Order #<?php echo htmlspecialchars($order['id']); ?></p>
             </div>
 
             <?php if (isset($_SESSION['message'])): ?>
@@ -985,172 +822,113 @@ while ($row = $stats_result->fetch_assoc()) {
                 <?php unset($_SESSION['message']); ?>
             <?php endif; ?>
 
-            <?php if (!$user): ?>
-                <div class="empty-state">
-                    <i class="fas fa-sign-in-alt"></i>
-                    <h3>Please Sign In</h3>
-                    <p>You need to be logged in to view your orders.</p>
-                    <a href="login.php" class="btn btn-primary"><i class="fas fa-sign-in-alt"></i> Login</a>
-                    <a href="register.php" class="btn btn-outline"><i class="fas fa-user-plus"></i> Create Account</a>
-                </div>
-            <?php else: ?>
-                <section class="filters-section">
-                    <h2 class="filters-title">Filter Orders</h2>
-                    <form method="GET" action="orders.php">
-                        <div class="filters-row">
-                            <div class="filter-group">
-                                <label for="status">Status</label>
-                                <select name="status" id="status">
-                                    <option value="">All Statuses</option>
-                                    <option value="pending" <?php echo $status_filter === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                    <option value="processing" <?php echo $status_filter === 'processing' ? 'selected' : ''; ?>>Processing</option>
-                                    <option value="shipped" <?php echo $status_filter === 'shipped' ? 'selected' : ''; ?>>Shipped</option>
-                                    <option value="delivered" <?php echo $status_filter === 'delivered' ? 'selected' : ''; ?>>Delivered</option>
-                                    <option value="cancelled" <?php echo $status_filter === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                                </select>
-                            </div>
-                            <div class="filter-group">
-                                <label for="date">Date</label>
-                                <input type="date" name="date" id="date" value="<?php echo htmlspecialchars($date_filter); ?>">
-                            </div>
+            <div class="order-card">
+                <div class="order-header">
+                    <div class="order-header-row">
+                        <span class="order-id">Order #<?php echo htmlspecialchars($order['id']); ?></span>
+                        <span class="order-status status-<?php echo htmlspecialchars($order['status']); ?>">
+                            <?php echo htmlspecialchars(ucfirst($order['status'])); ?>
+                        </span>
+                    </div>
+                    <div class="order-meta">
+                        <div>
+                            <strong>Date:</strong>
+                            <?php echo htmlspecialchars(date('M d, Y', strtotime($order['created_at']))); ?>
                         </div>
-                        <button type="submit" class="filter-btn"><i class="fas fa-filter"></i> Apply Filters</button>
-                    </form>
-                </section>
-
-                <section class="orders-summary">
-                    <h2 class="summary-title">Order Summary</h2>
-                    <div class="summary-stats">
-                        <div class="stat-card">
-                            <div class="stat-number"><?php echo $stats['pending']; ?></div>
-                            <div class="stat-label">Pending</div>
+                        <div>
+                            <strong>Total:</strong>
+                            $<?php echo number_format($order['total'] + $order['delivery_fee'], 2); ?>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-number"><?php echo $stats['processing']; ?></div>
-                            <div class="stat-label">Processing</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number"><?php echo $stats['shipped']; ?></div>
-                            <div class="stat-label">Shipped</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number"><?php echo $stats['delivered']; ?></div>
-                            <div class="stat-label">Delivered</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number"><?php echo $stats['cancelled']; ?></div>
-                            <div class="stat-label">Cancelled</div>
+                        <div>
+                            <strong>Items:</strong>
+                            <?php echo count($items); ?>
                         </div>
                     </div>
-                </section>
-
-                <section class="orders-list">
-                    <?php if ($orders->num_rows > 0): ?>
-                        <?php while ($order = $orders->fetch_assoc()): ?>
-                            <div class="order-card">
-                                <div class="order-header">
-                                    <div class="order-header-row">
-                                        <span class="order-id">Order #<?php echo htmlspecialchars($order['id']); ?></span>
-                                        <span class="order-status status-<?php echo htmlspecialchars($order['status']); ?>">
-                                            <?php echo htmlspecialchars(ucfirst($order['status'])); ?>
-                                        </span>
-                                    </div>
-                                    <div class="order-meta">
-                                        <div>
-                                            <strong>Date:</strong>
-                                            <?php echo htmlspecialchars(date('M d, Y', strtotime($order['created_at']))); ?>
-                                        </div>
-                                        <div>
-                                            <strong>Total:</strong>
-                                            $<?php echo number_format($order['total'], 2); ?>
-                                        </div>
-                                        <div>
-                                            <strong>Items:</strong>
-                                            <?php echo htmlspecialchars($order['item_count']); ?>
-                                        </div>
-                                    </div>
+                </div>
+                <div class="order-body">
+                    <div class="order-items">
+                        <h3 class="order-items-title">Items</h3>
+                        <?php foreach ($items as $item): ?>
+                            <div class="order-item">
+                                <img src="<?php echo htmlspecialchars($item['image'] ?: 'https://via.placeholder.com/60'); ?>" 
+                                     alt="<?php echo htmlspecialchars($item['name']); ?>" class="item-image">
+                                <div class="item-details">
+                                    <div class="item-name"><?php echo htmlspecialchars($item['name']); ?></div>
+                                    <div class="item-sku">SKU: <?php echo htmlspecialchars($item['sku']); ?></div>
+                                    <div class="item-quantity">Quantity: <?php echo htmlspecialchars($item['quantity']); ?></div>
                                 </div>
-                                <div class="order-body">
-                                    <div class="order-items">
-                                        <h3 class="order-items-title">Items</h3>
-                                        <?php
-                                        $items_query = "SELECT p.name, p.sku, p.image, oi.quantity, oi.price 
-                                                        FROM order_items oi 
-                                                        JOIN products p ON oi.product_id = p.id 
-                                                        WHERE oi.order_id = ?";
-                                        $items_stmt = $conn->prepare($items_query);
-                                        $items_stmt->bind_param("i", $order['id']);
-                                        $items_stmt->execute();
-                                        $items = $items_stmt->get_result();
-                                        while ($item = $items->fetch_assoc()):
-                                        ?>
-                                            <div class="order-item">
-                                                <img src="<?php echo htmlspecialchars($item['image'] ?: 'https://via.placeholder.com/60'); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" class="item-image">
-                                                <div class="item-details">
-                                                    <div class="item-name"><?php echo htmlspecialchars($item['name']); ?></div>
-                                                    <div class="item-sku">SKU: <?php echo htmlspecialchars($item['sku']); ?></div>
-                                                    <div class="item-quantity">Quantity: <?php echo htmlspecialchars($item['quantity']); ?></div>
-                                                </div>
-                                                <div class="item-price">$<?php echo number_format($item['price'], 2); ?></div>
-                                            </div>
-                                        <?php endwhile; $items_stmt->close(); ?>
-                                    </div>
-                                    <div class="order-summary">
-                                        <div class="summary-row">
-                                            <span>Subtotal</span>
-                                            <span>$<?php echo number_format($order['total'], 2); ?></span>
-                                        </div>
-                                        <div class="summary-row">
-                                            <span>Shipping</span>
-                                            <span>Free</span>
-                                        </div>
-                                        <div class="summary-row total">
-                                            <span>Total</span>
-                                            <span>$<?php echo number_format($order['total'], 2); ?></span>
-                                        </div>
-                                    </div>
-                                    <div class="order-actions">
-                                        <a href="order-details.php?id=<?php echo $order['id']; ?>" class="btn btn-primary"><i class="fas fa-eye"></i> View Details</a>
-                                        <?php if (in_array($order['status'], ['pending', 'processing'])): ?>
-                                            <form method="POST" action="orders.php">
-                                                <input type="hidden" name="order_id" value="<?php echo $order['id']; ?>">
-                                                <button type="submit" name="cancel_order" class="btn btn-danger" onclick="return confirm('Are you sure you want to cancel this order?');">
-                                                    <i class="fas fa-times"></i> Cancel Order
-                                                </button>
-                                            </form>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
+                                <div class="item-price">$<?php echo number_format($item['price'], 2); ?></div>
                             </div>
-                        <?php endwhile; ?>
-                    <?php else: ?>
-                        <div class="empty-state">
-                            <i class="fas fa-box-open"></i>
-                            <h3>No Orders Found</h3>
-                            <p>You haven't placed any orders yet or no orders match your filters.</p>
-                            <a href="index.php" class="btn btn-primary"><i class="fas fa-shopping-bag"></i> Shop Now</a>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="order-summary">
+                        <div class="summary-row">
+                            <span>Subtotal</span>
+                            <span>$<?php echo number_format($order['total'], 2); ?></span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Delivery Fee</span>
+                            <span>$<?php echo number_format($order['delivery_fee'], 2); ?></span>
+                        </div>
+                        <div class="summary-row total">
+                            <span>Total</span>
+                            <span>$<?php echo number_format($order['total'] + $order['delivery_fee'], 2); ?></span>
+                        </div>
+                    </div>
+                    <?php if (in_array($order['status'], ['pending', 'processing'])): ?>
+                        <div class="order-actions">
+                            <form method="POST" action="order_details.php?id=<?php echo $order_id; ?>">
+                                <input type="hidden" name="order_id" value="<?php echo $order['id']; ?>">
+                                <button type="submit" name="cancel_order" class="btn btn-danger" 
+                                        onclick="return confirm('Are you sure you want to cancel this order?');">
+                                    <i class="fas fa-times"></i> Cancel Order
+                                </button>
+                            </form>
                         </div>
                     <?php endif; ?>
-                </section>
+                </div>
+            </div>
 
-                <?php if ($total_pages > 1): ?>
-                    <div class="pagination">
-                        <?php if ($page > 1): ?>
-                            <a href="?page=<?php echo $page - 1; ?>&status=<?php echo urlencode($status_filter); ?>&date=<?php echo urlencode($date_filter); ?>">&laquo; Previous</a>
+            <div class="address-section">
+                <h2 class="section-title">Shipping Address</h2>
+                <div class="address-details">
+                    <p><strong>Name:</strong> <?php echo htmlspecialchars($address['full_name'] ?? 'N/A'); ?></p>
+                    <p><strong>Address:</strong> <?php echo htmlspecialchars($address['street_address'] ?? 'N/A'); ?></p>
+                    <?php if (!empty($address['city']) || !empty($address['state']) || !empty($address['country'])): ?>
+                        <p><strong>Location:</strong> 
+                            <?php echo htmlspecialchars(implode(', ', array_filter([
+                                $address['city'], 
+                                $address['state'], 
+                                $address['country']
+                            ]))); ?>
+                        </p>
+                    <?php endif; ?>
+                    <?php if (!empty($address['postal_code'])): ?>
+                        <p><strong>Postal Code:</strong> <?php echo htmlspecialchars($address['postal_code']); ?></p>
+                    <?php endif; ?>
+                    <p><strong>Phone:</strong> <?php echo htmlspecialchars($address['phone'] ?? 'N/A'); ?></p>
+                </div>
+            </div>
+
+            <div class="payment-section">
+                <h2 class="section-title">Payment Information</h2>
+                <div class="payment-details">
+                    <?php if ($payment): ?>
+                        <p><strong>Amount:</strong> $<?php echo number_format($payment['amount'], 2); ?></p>
+                        <p><strong>Method:</strong> <?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $payment['payment_method']))); ?></p>
+                        <p><strong>Status:</strong> <?php echo htmlspecialchars(ucfirst($payment['payment_status'])); ?></p>
+                        <?php if ($payment['transaction_id']): ?>
+                            <p><strong>Transaction ID:</strong> <?php echo htmlspecialchars($payment['transaction_id']); ?></p>
                         <?php endif; ?>
-                        <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                            <?php if ($i == $page): ?>
-                                <span class="current"><?php echo $i; ?></span>
-                            <?php else: ?>
-                                <a href="?page=<?php echo $i; ?>&status=<?php echo urlencode($status_filter); ?>&date=<?php echo urlencode($date_filter); ?>"><?php echo $i; ?></a>
-                            <?php endif; ?>
-                        <?php endfor; ?>
-                        <?php if ($page < $total_pages): ?>
-                            <a href="?page=<?php echo $page + 1; ?>&status=<?php echo urlencode($status_filter); ?>&date=<?php echo urlencode($date_filter); ?>">Next &raquo;</a>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
-            <?php endif; ?>
+                    <?php else: ?>
+                        <p>No payment information available.</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="order-actions">
+                <a href="orders.php" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Back to Orders</a>
+            </div>
         </div>
     </main>
 
@@ -1190,7 +968,7 @@ while ($row = $stats_result->fetch_assoc()) {
         </div>
         <div class="footer-bottom">
             <div class="footer-bottom-content">
-                <p>&copy; <?php echo date('Y'); ?> Deeken. All rights reserved.</p>
+                <p>© <?php echo date('Y'); ?> Deeken. All rights reserved.</p>
                 <div class="footer-links">
                     <a href="#">Privacy Policy</a>
                     <a href="#">Terms of Service</a>

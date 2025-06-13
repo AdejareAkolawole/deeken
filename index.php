@@ -86,8 +86,7 @@ $cart_count = getCartCount($conn, $user);
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="responsive.css">
-    <link rel="stylesheet" href="hamburger.css">
-    <link rel="stylesheet" href="global.css">
+ 
     <style>
         .out-of-stock {
             background: #ef4444;
@@ -576,7 +575,7 @@ $cart_count = getCartCount($conn, $user);
                                 </button>
                                 <div class="out-of-stock">Out of Stock</div>
                             <?php endif; ?>
-                            <button onclick="showProductDetails(<?php echo $product['id']; ?>)"><i class="fas fa-eye"></i> View Details</button>
+                          
                         </div>
                     <?php endwhile; ?>
                 <?php else: ?>

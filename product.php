@@ -15,12 +15,28 @@ $product_id = isset($_GET['id']) ? (int)$_GET['id'] : null;
 
 // ----- REVIEW SUBMISSION -----
 if (isset($_POST['submit_review']) && $user && $product_id) {
+    error_log("Review submission: product_id=$product_id, user_id={$user['id']}, rating={$_POST['rating']}, text={$_POST['review_text']}");
     $text = sanitize($conn, $_POST['review_text']);
     $rating = (int)$_POST['rating'];
-    $stmt = $conn->prepare("INSERT INTO reviews (product_id, user_id, review_text, rating) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("iisi", $product_id, $user['id'], $text, $rating);
-    $stmt->execute();
-    $stmt->close();
+    if ($rating < 1 || $rating > 5) {
+        $error = "Rating must be between 1 and 5.";
+    } else {
+        $stmt = $conn->prepare("INSERT INTO reviews (product_id, user_id, review_text, rating) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param("iisi", $product_id, $user['id'], $text, $rating);
+        if ($stmt->execute()) {
+            // Update product rating
+            $stmt = $conn->prepare("UPDATE products p SET rating = (SELECT AVG(rating) FROM reviews WHERE product_id = ?) WHERE p.id = ?");
+            $stmt->bind_param("ii", $product_id, $product_id);
+            $stmt->execute();
+            $stmt->close();
+            header("Location: product.php?id=$product_id");
+            exit;
+        } else {
+            error_log("Review insert failed: " . $conn->error);
+            $error = "Failed to submit review. Please try again.";
+        }
+        $stmt->close();
+    }
 }
 
 // ----- FETCH PRODUCT -----
@@ -631,6 +647,9 @@ function displayStars($rating) {
 
     <!-- ----- MAIN CONTENT WRAPPER ----- -->
     <main>
+        <?php if (isset($error)): ?>
+            <p style="color: red;"><?php echo htmlspecialchars($error); ?></p>
+        <?php endif; ?>
         <?php if ($product): ?>
             <div class="main-content-wrapper">
                 <!-- ----- LEFT CONTENT ----- -->
@@ -641,7 +660,7 @@ function displayStars($rating) {
                         <div class="product-info">
                             <h1><?php echo htmlspecialchars($product['name']); ?></h1>
                             <p>$<?php echo number_format($product['price'], 2); ?></p>
-                            <p><?php echo displayStars($product['rating']); ?></p>
+                            <p>Rating: <?php echo $product['rating']; ?> (<?php echo displayStars($product['rating']); ?>)</p>
                             <p><?php echo htmlspecialchars($product['description']); ?></p>
                             <form method="POST" action="cart.php">
                                 <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
@@ -665,7 +684,7 @@ function displayStars($rating) {
                                 <div class="review">
                                     <p><strong><?php echo htmlspecialchars($review['full_name'] ?? $review['email']); ?></strong></p>
                                     <p><?php echo htmlspecialchars($review['review_text']); ?></p>
-                                    <p><?php echo displayStars($review['rating']); ?></p>
+                                    <p>Rating: <?php echo $review['rating']; ?> (<?php echo displayStars($review['rating']); ?>)</p>
                                 </div>
                             <?php endwhile; else: ?>
                                 <p>No reviews yet.</p>
@@ -701,7 +720,6 @@ function displayStars($rating) {
                     <section class="other-categories">
                         <h2><i class="fas fa-th-list"></i> Other Categories</h2>
                         <?php
-                        // Fetch categories with products, excluding the current product's category_id
                         $stmt = $conn->prepare("
                             SELECT DISTINCT c.id, c.name 
                             FROM categories c 
@@ -715,7 +733,6 @@ function displayStars($rating) {
 
                         if ($categories->num_rows > 0):
                             while ($cat = $categories->fetch_assoc()):
-                                // Fetch up to 3 products from each category
                                 $cat_stmt = $conn->prepare("SELECT * FROM products WHERE category_id = ? LIMIT 3");
                                 $cat_stmt->bind_param("i", $cat['id']);
                                 $cat_stmt->execute();
@@ -783,56 +800,67 @@ function displayStars($rating) {
     <script src="utils.js"></script>
     <script src="hamburger.js"></script>
     <script>
-        // Ensure stars are displayed in reverse order (5 to 1) for visual consistency
-        document.querySelectorAll('.star-rating label').forEach(label => {
-            label.addEventListener('click', () => {
-                const input = document.querySelector(`#${label.getAttribute('for')}`);
-                input.checked = true;
+        document.addEventListener('DOMContentLoaded', function() {
+            // Toggle profile dropdown
+            function toggleProfileDropdown() {
+                const dropdown = document.getElementById('profileDropdown');
+                if (dropdown) {
+                    dropdown.classList.toggle('show');
+                    console.log('Dropdown toggled:', dropdown.classList.contains('show') ? 'visible' : 'hidden');
+                } else {
+                    console.log('Dropdown element not found');
+                }
+            }
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                const profileDropdown = document.querySelector('.profile-dropdown');
+                const dropdown = document.getElementById('profileDropdown');
+                if (profileDropdown && dropdown && !profileDropdown.contains(event.target)) {
+                    dropdown.classList.remove('show');
+                }
             });
-        });
 
-        // Search products
-        function searchProducts() {
-            const search = document.getElementById('searchInput').value;
-            window.location.href = `index.php?search=${encodeURIComponent(search)}`;
-        }
+            // Ensure toggle function is globally available
+            window.toggleProfileDropdown = toggleProfileDropdown;
 
-        // Toggle profile dropdown
-        function toggleProfileDropdown() {
-            const dropdown = document.getElementById('profileDropdown');
-            dropdown.classList.toggle('show');
-        }
-        
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
-            const profileDropdown = document.querySelector('.profile-dropdown');
-            const dropdown = document.getElementById('profileDropdown');
-            if (!profileDropdown.contains(event.target)) {
-                dropdown.classList.remove('show');
+            // Search products
+            function searchProducts() {
+                const search = document.getElementById('searchInput').value;
+                window.location.href = `index.php?search=${encodeURIComponent(search)}`;
             }
-        });
 
-        // Navbar scroll behavior
-        let lastScrollTop = 0;
-        const navbar = document.querySelector('.navbar');
+            // Star rating interaction
+            document.querySelectorAll('.star-rating label').forEach(label => {
+                label.addEventListener('click', () => {
+                    const input = document.querySelector(`#${label.getAttribute('for')}`);
+                    input.checked = true;
+                });
+            });
 
-        window.addEventListener('scroll', function() {
-            let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-            
-            if (currentScroll > lastScrollTop) {
-                // Scrolling down
-                navbar.classList.add('hidden');
-            } else {
-                // Scrolling up
-                navbar.classList.remove('hidden');
+            // Debug form submission
+            document.querySelector('#reviewForm').addEventListener('submit', function(e) {
+                const rating = document.querySelector('input[name="rating"]:checked')?.value;
+                console.log('Submitting review with rating:', rating, 'text:', document.querySelector('textarea[name="review_text"]').value);
+            });
+
+            // Navbar scroll behavior
+            let lastScrollTop = 0;
+            const navbar = document.querySelector('.navbar');
+            if (navbar) {
+                window.addEventListener('scroll', function() {
+                    let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+                    if (currentScroll > lastScrollTop) {
+                        navbar.classList.add('hidden');
+                    } else {
+                        navbar.classList.remove('hidden');
+                    }
+                    if (currentScroll <= 0) {
+                        navbar.classList.remove('hidden');
+                    }
+                    lastScrollTop = currentScroll <= 0 ? 0 : currentScrollTop;
+                });
             }
-            
-            // Show navbar when at the top of the page
-            if (currentScroll <= 0) {
-                navbar.classList.remove('hidden');
-            }
-            
-            lastScrollTop = currentScroll <= 0 ? 0 : currentScrollTop;
         });
     </script>
 </body>

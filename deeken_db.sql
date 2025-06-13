@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 12, 2025 at 08:42 PM
+-- Generation Time: Jun 13, 2025 at 05:29 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -59,7 +59,34 @@ INSERT INTO `addresses` (`id`, `user_id`, `full_name`, `street_address`, `city`,
 (10, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 17:55:46', '2025-06-12 17:55:46'),
 (11, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 18:01:34', '2025-06-12 18:01:34'),
 (12, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 18:17:02', '2025-06-12 18:17:02'),
-(13, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 18:32:45', '2025-06-12 18:32:45');
+(13, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 18:32:45', '2025-06-12 18:32:45'),
+(14, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 19:07:48', '2025-06-12 19:07:48'),
+(15, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 19:34:08', '2025-06-12 19:34:08'),
+(16, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-12 21:03:36', '2025-06-12 21:03:36'),
+(17, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-13 10:59:56', '2025-06-13 10:59:56'),
+(18, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-13 11:07:33', '2025-06-13 11:07:33'),
+(19, 1, 'Yahaya Onusagba Sabdat', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-13 11:17:22', '2025-06-13 11:17:22'),
+(20, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-13 12:19:05', '2025-06-13 12:19:05'),
+(21, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-13 12:43:13', '2025-06-13 12:43:13'),
+(22, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-13 13:16:47', '2025-06-13 13:16:47'),
+(23, 1, 'Idris Ahmad Rabiu', 'Admin Address', '', '', '', '', '1234567890', 1, '2025-06-13 14:58:39', '2025-06-13 14:58:39');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `carousel_images`
+--
+
+CREATE TABLE `carousel_images` (
+  `id` int(11) UNSIGNED NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `subtitle` text NOT NULL,
+  `image` varchar(255) NOT NULL,
+  `link` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -101,6 +128,30 @@ INSERT INTO `categories` (`id`, `name`, `description`, `created_at`, `updated_at
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `delivery_fees`
+--
+
+CREATE TABLE `delivery_fees` (
+  `id` int(11) UNSIGNED NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `fee` decimal(10,2) NOT NULL,
+  `min_order_amount` decimal(10,2) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `delivery_fees`
+--
+
+INSERT INTO `delivery_fees` (`id`, `name`, `fee`, `min_order_amount`, `description`, `is_active`, `created_at`, `updated_at`) VALUES
+(1, 'Standard Delivery', 5.00, NULL, 'Default delivery fee for all orders', 1, '2025-06-13 11:22:01', '2025-06-13 11:22:01');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `inventory`
 --
 
@@ -117,8 +168,8 @@ CREATE TABLE `inventory` (
 --
 
 INSERT INTO `inventory` (`id`, `product_id`, `stock_quantity`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, '2025-06-12 14:48:39', '2025-06-12 14:48:39'),
-(2, 2, 2, '2025-06-12 16:07:08', '2025-06-12 16:07:08');
+(2, 2, 0, '2025-06-12 16:07:08', '2025-06-12 21:03:36'),
+(3, 3, 15, '2025-06-13 09:11:00', '2025-06-13 14:58:39');
 
 -- --------------------------------------------------------
 
@@ -134,13 +185,6 @@ CREATE TABLE `miscellaneous_attributes` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `miscellaneous_attributes`
---
-
-INSERT INTO `miscellaneous_attributes` (`id`, `product_id`, `attribute`, `created_at`, `updated_at`) VALUES
-(1, 1, 'new_arrival', '2025-06-12 14:48:39', '2025-06-12 14:48:39');
-
 -- --------------------------------------------------------
 
 --
@@ -154,6 +198,7 @@ CREATE TABLE `orders` (
   `payment_id` int(11) UNSIGNED DEFAULT NULL,
   `total` decimal(10,2) NOT NULL,
   `delivery_fee` decimal(10,2) NOT NULL,
+  `delivery_fee_id` int(11) UNSIGNED DEFAULT NULL,
   `status` enum('pending','processing','shipped','delivered','cancelled') DEFAULT 'pending',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -163,20 +208,30 @@ CREATE TABLE `orders` (
 -- Dumping data for table `orders`
 --
 
-INSERT INTO `orders` (`id`, `user_id`, `address_id`, `payment_id`, `total`, `delivery_fee`, `status`, `created_at`, `updated_at`) VALUES
-(2, 1, 1, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 15:14:37', '2025-06-12 16:11:06'),
-(3, 1, 2, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 15:25:14', '2025-06-12 16:11:54'),
-(4, 1, 3, NULL, 5.00, 5.00, 'cancelled', '2025-06-12 15:31:26', '2025-06-12 16:11:11'),
-(5, 1, 4, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 15:31:59', '2025-06-12 16:10:58'),
-(6, 1, 5, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 15:33:01', '2025-06-12 16:10:50'),
-(7, 1, 6, NULL, 8.00, 5.00, 'cancelled', '2025-06-12 16:07:42', '2025-06-12 16:10:44'),
-(8, 1, 7, NULL, 7.00, 5.00, 'pending', '2025-06-12 17:13:03', '2025-06-12 17:13:03'),
-(9, 1, 8, NULL, 7.00, 5.00, 'pending', '2025-06-12 17:13:56', '2025-06-12 17:13:56'),
-(10, 1, 9, NULL, 7.00, 5.00, 'cancelled', '2025-06-12 17:54:57', '2025-06-12 17:55:24'),
-(11, 1, 10, NULL, 7.00, 5.00, 'pending', '2025-06-12 17:55:46', '2025-06-12 17:55:46'),
-(12, 1, 11, NULL, 8.00, 5.00, 'pending', '2025-06-12 18:01:34', '2025-06-12 18:01:34'),
-(13, 1, 12, NULL, 7.00, 5.00, 'pending', '2025-06-12 18:17:02', '2025-06-12 18:17:02'),
-(14, 1, 13, NULL, 7.00, 5.00, 'pending', '2025-06-12 18:32:45', '2025-06-12 18:32:45');
+INSERT INTO `orders` (`id`, `user_id`, `address_id`, `payment_id`, `total`, `delivery_fee`, `delivery_fee_id`, `status`, `created_at`, `updated_at`) VALUES
+(2, 1, 1, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 15:14:37', '2025-06-12 16:11:06'),
+(3, 1, 2, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 15:25:14', '2025-06-12 16:11:54'),
+(4, 1, 3, NULL, 5.00, 5.00, NULL, 'cancelled', '2025-06-12 15:31:26', '2025-06-12 16:11:11'),
+(5, 1, 4, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 15:31:59', '2025-06-12 16:10:58'),
+(6, 1, 5, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 15:33:01', '2025-06-12 16:10:50'),
+(7, 1, 6, NULL, 8.00, 5.00, NULL, 'cancelled', '2025-06-12 16:07:42', '2025-06-12 16:10:44'),
+(8, 1, 7, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 17:13:03', '2025-06-12 19:02:38'),
+(9, 1, 8, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 17:13:56', '2025-06-12 19:02:32'),
+(10, 1, 9, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 17:54:57', '2025-06-12 17:55:24'),
+(11, 1, 10, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 17:55:46', '2025-06-12 19:02:23'),
+(12, 1, 11, NULL, 8.00, 5.00, NULL, 'cancelled', '2025-06-12 18:01:34', '2025-06-12 19:02:10'),
+(13, 1, 12, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 18:17:02', '2025-06-12 19:02:04'),
+(14, 1, 13, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 18:32:45', '2025-06-12 19:01:56'),
+(15, 1, 14, NULL, 8.00, 5.00, NULL, 'cancelled', '2025-06-12 19:07:48', '2025-06-12 21:06:04'),
+(16, 1, 15, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-12 19:34:08', '2025-06-12 21:05:57'),
+(17, 1, 16, NULL, 8.00, 5.00, NULL, 'cancelled', '2025-06-12 21:03:36', '2025-06-12 21:05:48'),
+(18, 1, 17, NULL, 7.00, 5.00, NULL, 'cancelled', '2025-06-13 10:59:56', '2025-06-13 11:07:58'),
+(19, 1, 18, NULL, 6.00, 5.00, NULL, 'cancelled', '2025-06-13 11:07:33', '2025-06-13 11:07:49'),
+(20, 1, 19, NULL, 6.00, 5.00, NULL, 'cancelled', '2025-06-13 11:17:22', '2025-06-13 11:17:34'),
+(21, 1, 20, NULL, 6.00, 5.00, NULL, 'processing', '2025-06-13 12:19:05', '2025-06-13 12:19:05'),
+(22, 1, 21, NULL, 6.00, 5.00, NULL, 'processing', '2025-06-13 12:43:13', '2025-06-13 12:43:13'),
+(23, 1, 22, NULL, 6.00, 5.00, NULL, 'processing', '2025-06-13 13:16:47', '2025-06-13 13:16:47'),
+(24, 1, 23, NULL, 6.00, 5.00, 1, 'processing', '2025-06-13 14:58:39', '2025-06-13 14:58:39');
 
 -- --------------------------------------------------------
 
@@ -198,18 +253,17 @@ CREATE TABLE `order_items` (
 --
 
 INSERT INTO `order_items` (`id`, `order_id`, `product_id`, `quantity`, `price`, `created_at`) VALUES
-(1, 2, 1, 1, 2.00, '2025-06-12 15:14:37'),
-(2, 3, 1, 1, 2.00, '2025-06-12 15:25:14'),
-(3, 5, 1, 1, 2.00, '2025-06-12 15:31:59'),
-(4, 6, 1, 1, 2.00, '2025-06-12 15:33:01'),
 (5, 7, 2, 1, 3.00, '2025-06-12 16:07:42'),
-(6, 8, 1, 1, 2.00, '2025-06-12 17:13:03'),
-(7, 9, 1, 1, 2.00, '2025-06-12 17:13:56'),
-(8, 10, 1, 1, 2.00, '2025-06-12 17:54:57'),
-(9, 11, 1, 1, 2.00, '2025-06-12 17:55:46'),
 (10, 12, 2, 1, 3.00, '2025-06-12 18:01:34'),
-(11, 13, 1, 1, 2.00, '2025-06-12 18:17:02'),
-(12, 14, 1, 1, 2.00, '2025-06-12 18:32:45');
+(13, 15, 2, 1, 3.00, '2025-06-12 19:07:48'),
+(15, 17, 2, 1, 3.00, '2025-06-12 21:03:36'),
+(16, 18, 3, 2, 1.00, '2025-06-13 10:59:56'),
+(17, 19, 3, 1, 1.00, '2025-06-13 11:07:33'),
+(18, 20, 3, 1, 1.00, '2025-06-13 11:17:22'),
+(19, 21, 3, 1, 1.00, '2025-06-13 12:19:05'),
+(20, 22, 3, 1, 1.00, '2025-06-13 12:43:13'),
+(21, 23, 3, 1, 1.00, '2025-06-13 13:16:47'),
+(22, 24, 3, 1, 1.00, '2025-06-13 14:58:39');
 
 -- --------------------------------------------------------
 
@@ -266,8 +320,8 @@ CREATE TABLE `products` (
 --
 
 INSERT INTO `products` (`id`, `category_id`, `name`, `sku`, `price`, `image`, `description`, `rating`, `featured`, `created_at`, `updated_at`) VALUES
-(1, 2, 'screw driver', 'PROD37405', 2.00, 'Uploads/screw.jpg', 'Description for screw driver', 0.0, 0, '2025-06-12 14:48:39', '2025-06-12 14:48:39'),
-(2, 2, 'screw driver ++', 'PROD20771', 3.00, 'Uploads/screw.jpg', 'Description for screw driver ++', 0.0, 0, '2025-06-12 16:07:08', '2025-06-12 16:07:08');
+(2, 2, 'screw driver ++', 'PROD20771', 3.00, 'Uploads/img_684bf7eb558b4.jpg', 'Descrirvdcsxaption for screw driver ++', 0.0, 0, '2025-06-12 16:07:08', '2025-06-13 10:05:31'),
+(3, 2, 'screw driver', 'PROD99562', 1.00, 'Uploads/img_684beb243492d.jpg', 'gfdsa', 0.0, 0, '2025-06-13 09:11:00', '2025-06-13 09:11:00');
 
 -- --------------------------------------------------------
 
@@ -285,6 +339,13 @@ CREATE TABLE `reviews` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `reviews`
+--
+
+INSERT INTO `reviews` (`id`, `product_id`, `user_id`, `rating`, `review_text`, `verified_purchase`, `created_at`, `updated_at`) VALUES
+(1, 3, 1, 5, 'nicee', 0, '2025-06-13 09:31:03', '2025-06-13 09:31:03');
 
 -- --------------------------------------------------------
 
@@ -310,7 +371,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `email`, `password`, `full_name`, `profile_picture`, `address`, `phone`, `is_admin`, `created_at`, `updated_at`) VALUES
-(1, 'admin@deeken.com', '$2y$10$MmJc/dCV8UgXgsB5YCIppuMseCZkbCBuW.uDaI5BdG5ooJJr8DYDe', 'Idris Ahmad Rabiu', NULL, 'Admin Address', '1234567890', 1, '2025-06-10 22:43:23', '2025-06-12 15:14:37');
+(1, 'admin@deeken.com', '$2y$10$MmJc/dCV8UgXgsB5YCIppuMseCZkbCBuW.uDaI5BdG5ooJJr8DYDe', 'Idris Ahmad Rabiu', NULL, 'Admin Address', '1234567890', 1, '2025-06-10 22:43:23', '2025-06-13 12:19:05');
 
 --
 -- Indexes for dumped tables
@@ -324,6 +385,12 @@ ALTER TABLE `addresses`
   ADD KEY `user_id` (`user_id`);
 
 --
+-- Indexes for table `carousel_images`
+--
+ALTER TABLE `carousel_images`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `cart`
 --
 ALTER TABLE `cart`
@@ -335,6 +402,13 @@ ALTER TABLE `cart`
 -- Indexes for table `categories`
 --
 ALTER TABLE `categories`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indexes for table `delivery_fees`
+--
+ALTER TABLE `delivery_fees`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `name` (`name`);
 
@@ -359,7 +433,8 @@ ALTER TABLE `orders`
   ADD PRIMARY KEY (`id`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `address_id` (`address_id`),
-  ADD KEY `payment_id` (`payment_id`);
+  ADD KEY `payment_id` (`payment_id`),
+  ADD KEY `orders_ibfk_4` (`delivery_fee_id`);
 
 --
 -- Indexes for table `order_items`
@@ -414,13 +489,19 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `addresses`
 --
 ALTER TABLE `addresses`
-  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
+
+--
+-- AUTO_INCREMENT for table `carousel_images`
+--
+ALTER TABLE `carousel_images`
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `cart`
 --
 ALTER TABLE `cart`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
 
 --
 -- AUTO_INCREMENT for table `categories`
@@ -429,10 +510,16 @@ ALTER TABLE `categories`
   MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
+-- AUTO_INCREMENT for table `delivery_fees`
+--
+ALTER TABLE `delivery_fees`
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
 -- AUTO_INCREMENT for table `inventory`
 --
 ALTER TABLE `inventory`
-  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `miscellaneous_attributes`
@@ -444,13 +531,13 @@ ALTER TABLE `miscellaneous_attributes`
 -- AUTO_INCREMENT for table `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- AUTO_INCREMENT for table `order_items`
 --
 ALTER TABLE `order_items`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
 -- AUTO_INCREMENT for table `password_resets`
@@ -468,13 +555,13 @@ ALTER TABLE `payments`
 -- AUTO_INCREMENT for table `products`
 --
 ALTER TABLE `products`
-  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `reviews`
 --
 ALTER TABLE `reviews`
-  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `users`
@@ -517,7 +604,8 @@ ALTER TABLE `miscellaneous_attributes`
 ALTER TABLE `orders`
   ADD CONSTRAINT `orders_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `orders_ibfk_2` FOREIGN KEY (`address_id`) REFERENCES `addresses` (`id`),
-  ADD CONSTRAINT `orders_ibfk_3` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL;
+  ADD CONSTRAINT `orders_ibfk_3` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `orders_ibfk_4` FOREIGN KEY (`delivery_fee_id`) REFERENCES `delivery_fees` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `order_items`
