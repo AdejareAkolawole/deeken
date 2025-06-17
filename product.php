@@ -110,7 +110,7 @@ function displayStars($rating) {
             display: flex;
             flex-direction: column;
             position: relative;
-            left: 300px;
+            right: -45px;
         }
 
         .right-content {
@@ -118,13 +118,13 @@ function displayStars($rating) {
             position: sticky;
             top: 2rem;
             height: fit-content;
-            max-width: 400px;
+            max-width: 300px;
         }
 
         /* Styles for Other Categories Section */
         .other-categories {
-            background: linear-gradient(135deg, #BDF3FF, rgba(189, 243, 255, 0.3));
-            padding: 1rem;
+            background-color: white;
+            padding: 0.5rem;
             border-radius: 12px;
             animation: fadeIn 0.5s ease-out;
             border: 2px solid rgba(65, 64, 255, 0.1);
@@ -181,10 +181,10 @@ function displayStars($rating) {
         }
 
         .category-products {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 0.8rem;
-        }
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Increased minimum width */
+    gap: 0.8rem;
+}
 
         .category-product-card {
             background: rgba(255, 255, 255, 0.6);
