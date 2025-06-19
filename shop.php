@@ -1154,45 +1154,66 @@ function displayStars($rating) {
                     </button>
                 </div>
             <?php endif; ?>
-            <div class="profile-dropdown">
-                <?php if ($user): ?>
-                    <div class="profile-trigger" onclick="toggleProfileDropdown()">
-                        <div class="profile-avatar">
-                            <i class="fas fa-user"></i>
-                        </div>
-                        <div class="profile-info">
-                            <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
-                            <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
-                        </div>
-                    </div>
-                    <div class="profile-dropdown-menu" id="profileDropdown">
-                        <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-                        <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
-                        <a href="index.php"><i class="fas fa-heart"></i> Home</a>
-                        <?php if (!empty($user['is_admin'])): ?>
-                            <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
-                        <?php endif; ?>
-                        <hr class="dropdown-divider">
-                        <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-                    </div>
-                <?php else: ?>
-                    <div class="profile-trigger" onclick="toggleProfileDropdown()">
-                        <div class="profile-avatar">
-                            <i class="fas fa-user"></i>
-                        </div>
-                        <div class="profile-info">
-                            <span class="profile-greeting">Hi, Guest</span>
-                            <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
-                        </div>
-                    </div>
-                    <div class="profile-dropdown-menu" id="profileDropdown">
-                        <a href="login.php"><i class="fas fa-sign-in-alt"></i> Sign In</a>
-                        <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
-                        <hr class="dropdown-divider">
-                        <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
-                    </div>
-                <?php endif; ?>
+           <div class="profile-dropdown">
+    <?php if ($user): ?>
+        <?php
+        // Check for unread notifications
+        $unread_count = 0;
+        $db = new mysqli('localhost', 'username', 'password', 'deeken_db'); // Update with your DB credentials
+        if ($db->connect_error) {
+            die("Connection failed: " . $db->connect_error);
+        }
+        $stmt = $db->prepare("SELECT COUNT(*) as unread FROM notifications WHERE user_id = ? AND is_read = 0");
+        $stmt->bind_param("i", $user['id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $unread_count = $result->fetch_assoc()['unread'];
+        $stmt->close();
+        ?>
+        <div class="profile-trigger">
+            <div class="profile-avatar">
+                <i class="fas fa-user"></i>
             </div>
+            <div class="profile-info">
+                <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
+                <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="profile-trigger">
+            <div class="profile-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="profile-info">
+                <span class="profile-greeting">Hi, Guest</span>
+                <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
+            </div>
+        </div>
+    <?php endif; ?>
+    <div class="profile-dropdown-menu" id="profileDropdown">
+        <?php if ($user): ?>
+            <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
+            <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
+            <a href="inbox.php">
+                <i class="fas fa-inbox"></i> Inbox
+                <?php if ($unread_count > 0): ?>
+                    <span class="notification-dot"><?php echo $unread_count; ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="index.php"><i class="fas fa-home"></i> Home</a>
+            <?php if ($user['is_admin']): ?>
+                <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
+            <?php endif; ?>
+            <hr class="dropdown-divider">
+            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <?php else: ?>
+            <a href="login.php"><i class="fas fa-sign-in-alt"></i> Sign In</a>
+            <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
+            <hr class="dropdown-divider">
+            <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
+        <?php endif; ?>
+    </div>
+</div>
         </div>
         <div class="search-bar">
             <input type="text" id="searchInput" placeholder="Search products..." value="<?php echo htmlspecialchars($search_query); ?>" onkeypress="if(event.key==='Enter') searchProducts()">

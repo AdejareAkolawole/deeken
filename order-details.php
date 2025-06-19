@@ -717,6 +717,16 @@ if (!$order) {
             color: white;
             font-size: 1.5rem;
         }
+        .notification-dot {
+    display: inline-block;
+    background-color: red;
+    color: white;
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 12px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
 
         .contact-info p {
             display: flex;
@@ -770,45 +780,62 @@ if (!$order) {
             </div>
             <div class="nav-right">
                
-                <div class="profile-dropdown">
-                    <?php if ($user): ?>
-                        <div class="profile-trigger" onclick="toggleProfileDropdown()">
-                            <div class="profile-avatar">
-                                <i class="fas fa-user"></i>
-                            </div>
-                            <div class="profile-info">
-                                <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
-                                <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
-                            </div>
-                        </div>
-                        <div class="profile-dropdown-menu" id="profileDropdown">
-                            <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-                            <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
-                            <a href="index.php"><i class="fas fa-heart"></i> Home</a>
-                            <?php if (!empty($user['is_admin'])): ?>
-                                <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
-                            <?php endif; ?>
-                            <hr class="dropdown-divider">
-                            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-                        </div>
-                    <?php else: ?>
-                        <div class="profile-trigger" onclick="toggleProfileDropdown()">
-                            <div class="profile-avatar">
-                                <i class="fas fa-user"></i>
-                            </div>
-                            <div class="profile-info">
-                                <span class="profile-greeting">Hi, Guest</span>
-                                <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
-                            </div>
-                        </div>
-                        <div class="profile-dropdown-menu" id="profileDropdown">
-                            <a href="login.php"><i class="fas fa-sign-in"></i> Sign In</a>
-                            <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
-                            <hr class="dropdown-divider">
-                            <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
-                        </div>
-                    <?php endif; ?>
-                </div>
+              <div class="profile-dropdown">
+    <?php if ($user): ?>
+        <?php
+        // Check for unread notifications
+        require_once 'config.php'; // Include database connection
+        $unread_count = 0;
+        $stmt = $conn->prepare("SELECT COUNT(*) as unread FROM notifications WHERE user_id = ? AND is_read = 0");
+        $stmt->bind_param("i", $user['id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $unread_count = $result->fetch_assoc()['unread'];
+        $stmt->close();
+        ?>
+        <div class="profile-trigger" onclick="toggleProfileDropdown()">
+            <div class="profile-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="profile-info">
+                <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
+                <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
+            </div>
+        </div>
+        <div class="profile-dropdown-menu" id="profileDropdown">
+            <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
+            <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
+            <a href="inbox.php">
+                <i class="fas fa-inbox"></i> Inbox
+                <?php if ($unread_count > 0): ?>
+                    <span class="notification-dot"><?php echo $unread_count; ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="index.php"><i class="fas fa-heart"></i> Home</a>
+            <?php if (!empty($user['is_admin'])): ?>
+                <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
+            <?php endif; ?>
+            <hr class="dropdown-divider">
+            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        </div>
+    <?php else: ?>
+        <div class="profile-trigger" onclick="toggleProfileDropdown()">
+            <div class="profile-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="profile-info">
+                <span class="profile-greeting">Hi, Guest</span>
+                <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
+            </div>
+        </div>
+        <div class="profile-dropdown-menu" id="profileDropdown">
+            <a href="login.php"><i class="fas fa-sign-in"></i> Sign In</a>
+            <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
+            <hr class="dropdown-divider">
+            <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
+        </div>
+    <?php endif; ?>
+</div>
             </div>
         </nav>
     </header>
@@ -937,50 +964,14 @@ if (!$order) {
         </div>
     </main>
 
-    <footer class="footer">
-        <div class="footer-content">
-            <div class="footer-section">
-                <h3>About Deeken</h3>
-                <ul>
-                    <li><a href="#">Our Story</a></li>
-                    <li><a href="#">Careers</a></li>
-                    <li><a href="#">Press</a></li>
-                </ul>
-            </div>
-            <div class="footer-section">
-                <h3>Customer Service</h3>
-                <ul>
-                    <li><a href="#">Contact Us</a></li>
-                    <li><a href="#">Returns</a></li>
-                    <li><a href="#">FAQs</a></li>
-                </ul>
-            </div>
-            <div class="footer-section">
-                <h3>Follow Us</h3>
-                <div class="social-links">
-                    <a href="#"><i class="fab fa-facebook-f"></i></a>
-                    <a href="#"><i class="fab fa-twitter"></i></a>
-                    <a href="#"><i class="fab fa-instagram"></i></a>
-                </div>
-            </div>
-            <div class="footer-section">
-                <h3>Contact</h3>
-                <div class="contact-info">
-                    <p><i class="fas fa-envelope"></i> support@deeken.com</p>
-                    <p><i class="fas fa-phone"></i> +1-800-DEEKEN</p>
-                </div>
+     <div class="footer-bottom">
+            <p>Deeken © 2025, All Rights Reserved</p>
+            <div class="payment-icons">
+                <div class="payment-icon">💳</div>
+                <div class="payment-icon">🏦</div>
+                <div class="payment-icon">📱</div>
             </div>
         </div>
-        <div class="footer-bottom">
-            <div class="footer-bottom-content">
-                <p>© <?php echo date('Y'); ?> Deeken. All rights reserved.</p>
-                <div class="footer-links">
-                    <a href="#">Privacy Policy</a>
-                    <a href="#">Terms of Service</a>
-                </div>
-            </div>
-        </div>
-    </footer>
 
     <script src="hamburger.js"></script>
     <script src="utils.js"></script>

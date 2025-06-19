@@ -221,274 +221,545 @@ $current_total = $current_subtotal + $current_delivery_fee;
     <link rel="stylesheet" href="responsive.css">
     <link rel="stylesheet" href="stylesheet.css">
     <link rel="stylesheet" href="hamburger.css">
-    <style>
-        .navbar {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            transition: transform 0.3s ease;
-        }
+   <style>
+    /* Base styles (desktop and shared) */
+    .navbar {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        padding: 1rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        transition: transform 0.3s ease;
+    }
 
-        .navbar.hidden {
-            transform: translateY(-100%);
+    .navbar.hidden {
+        transform: translateY(-100%);
+    }
+
+    .logo {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #2A2aff;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .search-bar {
+        display: flex;
+        flex: 1;
+        max-width: 500px;
+        margin: 0 2rem;
+        position: relative;
+    }
+
+    .search-bar input {
+        flex: 1;
+        padding: 12px 20px;
+        border: 2px solid #e0e0e0;
+        border-radius: 50px;
+        font-family: 'Poppins', sans-serif;
+        font-size: 14px;
+        outline: none;
+        background: rgba(255, 255, 255, 0.9);
+    }
+
+    .search-bar button {
+        background: linear-gradient(135deg, #2a2aff, #bdf3ff);
+        border: none;
+        padding: 12px;
+        border-radius: 50px;
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .nav-right {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .cart-link {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        text-decoration: none;
+        color: #333;
+        font-weight: 500;
+        padding: 8px 16px;
+        border-radius: 25px;
+    }
+
+    .cart-count {
+        background: #ff6b35;
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+
+    .profile-dropdown {
+        position: relative;
+    }
+
+    .profile-trigger {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        cursor: pointer;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        background: white;
+    }
+
+    .profile-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2a2aff, #bdf3ff);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+    }
+
+    .profile-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .profile-greeting {
+        font-size: 12px;
+        color: #666;
+    }
+
+    .profile-account {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+    }
+
+    .profile-dropdown-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+        min-width: 220px;
+        z-index: 1001;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-10px);
+        transition: all 0.3s ease;
+    }
+
+    .profile-dropdown-menu.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+
+    .profile-dropdown-menu a {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 12px 16px;
+        text-decoration: none;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .notification-dot {
+        display: inline-block;
+        background-color: red;
+        color: white;
+        border-radius: 50%;
+        padding: 2px 6px;
+        font-size: 12px;
+        margin-left: 5px;
+        vertical-align: middle;
+    }
+
+    .checkout {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+
+    .checkout h2 {
+        font-size: 1.8rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #333;
+    }
+
+    .input-field, select {
+        width: 100%;
+        padding: 12px;
+        margin: 0.5rem 0;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: 'Poppins', sans-serif;
+        box-sizing: border-box;
+    }
+
+    .cart-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .cart-item-image {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 8px;
+    }
+
+    .cart-item-details h3 {
+        font-size: 1.2rem;
+        margin: 0;
+        color: #333;
+    }
+
+    .cart-item-details p {
+        font-size: 14px;
+        margin: 0.25rem 0;
+    }
+
+    .order-totals {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+    }
+
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 0.5rem 0;
+        font-size: 14px;
+    }
+
+    .total-row.final {
+        border-top: 2px solid #2a2aff;
+        padding-top: 0.75rem;
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: #2a2aff;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #2a2aff, #bdf3ff);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        width: 100%;
+        justify-content: center;
+        touch-action: manipulation;
+    }
+
+    .empty-cart {
+        text-align: center;
+        padding: 2rem;
+    }
+
+    .alert-error {
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 14px;
+    }
+
+    .stock-info.out-of-stock {
+        color: #ef4444;
+        font-weight: bold;
+    }
+
+    footer {
+        text-align: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        color: #666;
+        margin-top: 2rem;
+        font-size: 14px;
+    }
+
+    /* Responsive adjustments for mobile (up to 768px) */
+    @media (max-width: 768px) {
+        .navbar {
+            padding: 0.75rem 1rem;
+            flex-wrap: wrap;
         }
 
         .logo {
-            font-size: 1.8rem;
-            font-weight: 600;
-            color: #2A2aff;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            font-size: 1.5rem;
         }
 
         .search-bar {
-            display: flex;
             flex: 1;
-            max-width: 500px;
-            margin: 0 2rem;
-            position: relative;
+            max-width: 100%;
+            margin: 0.5rem 0;
+            order: 3;
+            width: calc(100% - 2rem);
         }
 
         .search-bar input {
-            flex: 1;
-            padding: 12px 20px;
-            border: 2px solid #e0e0e0;
-            border-radius: 50px;
-            font-family: 'Poppins', sans-serif;
-            font-size: 14px;
-            outline: none;
-            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 15px;
+            font-size: 12px;
         }
 
         .search-bar button {
-            background: linear-gradient(135deg, #2a2aff, #bdf3ff);
-            border: none;
-            padding: 12px;
-            border-radius: 50px;
-            color: white;
-            cursor: pointer;
+            padding: 10px;
         }
 
         .nav-right {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
+            gap: 0.75rem;
         }
 
         .cart-link {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            text-decoration: none;
-            color: #333;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 25px;
+            padding: 6px 12px;
+        }
+
+        .cart-text {
+            display: none; /* Hide "Cart" text on mobile */
         }
 
         .cart-count {
-            background: #ff6b35;
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-        }
-
-        .profile-dropdown {
-            position: relative;
+            width: 18px;
+            height: 18px;
+            font-size: 10px;
         }
 
         .profile-trigger {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 1px solid #e0e0e0;
-            background: white;
+            padding: 6px 8px;
         }
 
         .profile-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #2a2aff, #bdf3ff);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-        }
-
-        .profile-info {
-            display: flex;
-            flex-direction: column;
+            width: 32px;
+            height: 32px;
         }
 
         .profile-greeting {
-            font-size: 12px;
-            color: #666;
+            font-size: 10px;
         }
 
         .profile-account {
-            font-size: 14px;
-            font-weight: 500;
-            color: #333;
+            font-size: 12px;
         }
 
         .profile-dropdown-menu {
-            position: absolute;
-            top: 100%;
+            min-width: 200px;
             right: 0;
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-            min-width: 220px;
-            z-index: 1001;
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: all 0.3s ease;
-        }
-
-        .profile-dropdown-menu.show {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
         }
 
         .profile-dropdown-menu a {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 12px 16px;
-            text-decoration: none;
-            color: #333;
-            font-size: 14px;
+            padding: 10px 12px;
+            font-size: 12px;
+        }
+
+        .notification-dot {
+            font-size: 10px;
+            padding: 1px 5px;
         }
 
         .checkout {
-            max-width: 800px;
-            margin: 2rem auto;
-            padding: 0 1rem;
+            max-width: 100%;
+            margin: 1rem auto;
+            padding: 0 0.5rem;
         }
 
         .checkout h2 {
-            font-size: 1.8rem;
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: #333;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
         }
 
         .input-field, select {
-            width: 100%;
-            padding: 12px;
-            margin: 0.5rem 0;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            font-family: 'Poppins', sans-serif;
+            padding: 10px;
+            font-size: 12px;
+            margin: 0.25rem 0;
         }
 
         .cart-item {
             display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 1rem 0;
-            border-bottom: 1px solid #e0e0e0;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem 0;
         }
 
         .cart-item-image {
-            width: 80px;
-            height: 80px;
-            object-fit: cover;
-            border-radius: 8px;
+            width: 60px;
+            height: 60px;
         }
 
         .cart-item-details h3 {
-            font-size: 1.2rem;
-            margin: 0;
-            color: #333;
+            font-size: 1rem;
+        }
+
+        .cart-item-details p {
+            font-size: 12px;
         }
 
         .order-totals {
-            background: #f8f9fa;
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin: 1rem 0;
+            padding: 1rem;
         }
 
         .total-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 0.5rem 0;
+            font-size: 12px;
         }
 
         .total-row.final {
-            border-top: 2px solid #2a2aff;
-            padding-top: 0.75rem;
-            font-weight: 600;
-            font-size: 1.1rem;
-            color: #2a2aff;
+            font-size: 1rem;
         }
 
         .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 12px 24px;
-            background: linear-gradient(135deg, #2a2aff, #bdf3ff);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            width: 100%;
-            justify-content: center;
+            padding: 10px;
+            font-size: 14px;
         }
 
         .empty-cart {
-            text-align: center;
-            padding: 2rem;
+            padding: 1.5rem;
         }
 
         .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-        }
-
-        .stock-info.out-of-stock {
-            color: #ef4444;
-            font-weight: bold;
+            padding: 10px;
+            font-size: 12px;
         }
 
         footer {
-            text-align: center;
-            padding: 1rem;
-            background: #f8f9fa;
-            color: #666;
-            margin-top: 2rem;
+            padding: 0.75rem;
+            font-size: 12px;
         }
-    </style>
+    }
+
+    /* Extra small screens (up to 480px) */
+    @media (max-width: 480px) {
+        .navbar {
+            padding: 0.5rem;
+        }
+
+        .logo {
+            font-size: 1.2rem;
+        }
+
+        .search-bar {
+            margin: 0.25rem 0;
+        }
+
+        .search-bar input {
+            padding: 8px 12px;
+            font-size: 10px;
+        }
+
+        .search-bar button {
+            padding: 8px;
+        }
+
+        .profile-trigger {
+            gap: 0.5rem;
+        }
+
+        .profile-greeting {
+            display: none; /* Hide greeting on small screens */
+        }
+
+        .profile-account {
+            font-size: 10px;
+        }
+
+        .profile-dropdown-menu {
+            min-width: 180px;
+        }
+
+        .profile-dropdown-menu a {
+            font-size: 10px;
+            padding: 8px 10px;
+        }
+
+        .notification-dot {
+            font-size: 8px;
+            padding: 1px 4px;
+        }
+
+        .checkout h2 {
+            font-size: 1.2rem;
+        }
+
+        .input-field, select {
+            padding: 8px;
+            font-size: 10px;
+        }
+
+        .cart-item-image {
+            width: 50px;
+            height: 50px;
+        }
+
+        .cart-item-details h3 {
+            font-size: 0.875rem;
+        }
+
+        .cart-item-details p {
+            font-size: 10px;
+        }
+
+        .order-totals {
+            padding: 0.75rem;
+        }
+
+        .total-row {
+            font-size: 10px;
+        }
+
+        .total-row.final {
+            font-size: 0.875rem;
+        }
+
+        .btn {
+            padding: 8px;
+            font-size: 12px;
+        }
+
+        .alert-error {
+            padding: 8px;
+            font-size: 10px;
+        }
+
+        footer {
+            font-size: 10px;
+            padding: 0.5rem;
+        }
+    }
+</style>
 </head>
 <body>
     <header>
@@ -504,46 +775,63 @@ $current_total = $current_subtotal + $current_delivery_fee;
                     <span class="cart-text">Cart</span>
                     <span class="cart-count"><?php echo htmlspecialchars($cart_count); ?></span>
                 </a>
-                <div class="profile-dropdown">
-                    <?php if ($user): ?>
-                        <div class="profile-trigger">
-                            <div class="profile-avatar">
-                                <i class="fas fa-user"></i>
-                            </div>
-                            <div class="profile-info">
-                                <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
-                                <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
-                            </div>
-                        </div>
-                    <?php else: ?>
-                        <div class="profile-trigger">
-                            <div class="profile-avatar">
-                                <i class="fas fa-user"></i>
-                            </div>
-                            <div class="profile-info">
-                                <span class="profile-greeting">Hi, Guest</span>
-                                <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                    <div class="profile-dropdown-menu" id="profileDropdown">
-                        <?php if ($user): ?>
-                            <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-                            <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
-                            <a href="index.php"><i class="fas fa-home"></i> Home</a>
-                            <?php if ($user['is_admin']): ?>
-                                <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
-                            <?php endif; ?>
-                            <hr class="dropdown-divider">
-                            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-                        <?php else: ?>
-                            <a href="login.php"><i class="fas fa-sign-in-alt"></i> Sign In</a>
-                            <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
-                            <hr class="dropdown-divider">
-                            <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
-                        <?php endif; ?>
-                    </div>
-                </div>
+               <div class="profile-dropdown">
+    <?php if ($user): ?>
+        <?php
+        // Check for unread notifications
+        require_once 'config.php'; // Include database connection
+        $unread_count = 0;
+        $stmt = $conn->prepare("SELECT COUNT(*) as unread FROM notifications WHERE user_id = ? AND is_read = 0");
+        $stmt->bind_param("i", $user['id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $unread_count = $result->fetch_assoc()['unread'];
+        $stmt->close();
+        ?>
+        <div class="profile-trigger">
+            <div class="profile-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="profile-info">
+                <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
+                <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
+            </div>
+        </div>
+        <div class="profile-dropdown-menu" id="profileDropdown">
+            <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
+            <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
+            <a href="inbox.php">
+                <i class="fas fa-inbox"></i> Inbox
+                <?php if ($unread_count > 0): ?>
+                    <span class="notification-dot"><?php echo $unread_count; ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="index.php"><i class="fas fa-home"></i> Home</a>
+            <?php if ($user['is_admin']): ?>
+                <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
+            <?php endif; ?>
+            <hr class="dropdown-divider">
+            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        </div>
+    <?php else: ?>
+        <div class="profile-trigger">
+            <div class="profile-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="profile-info">
+                <span class="profile-greeting">Hi, Guest</span>
+                <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
+            </div>
+        </div>
+        <div class="profile-dropdown-menu" id="profileDropdown">
+            <a href="login.php"><i class="fas fa-sign-in-alt"></i> Sign In</a>
+            <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
+            <hr class="dropdown-divider">
+            <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
+        </div>
+    <?php endif; ?>
+</div>
+    </div>
             </div>
         </nav>
     </header>
