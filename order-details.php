@@ -380,7 +380,13 @@ if (!$order) {
 
         @media (max-width: 768px) {
             .navbar {
-                padding: 0.8rem 1rem;
+                padding: 0.01rem 3rem;
+            }
+            .logo{
+               position: relative;
+               right: 100px;
+               bottom: 40px;
+               
             }
             
             body {
@@ -389,6 +395,9 @@ if (!$order) {
 
             .nav-right {
                 gap: 1rem;
+                position: relative;
+                left: 100px;
+                top: 30px
             }
 
             .search-bar {
@@ -760,11 +769,7 @@ if (!$order) {
                 <button type="button" onclick="searchProducts()"><i class="fas fa-search"></i></button>
             </div>
             <div class="nav-right">
-                <a href="cart.php" class="cart-link">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span class="cart-text">Cart</span>
-                    <span class="cart-count"><?php echo (int)$cart_count; ?></span>
-                </a>    
+               
                 <div class="profile-dropdown">
                     <?php if ($user): ?>
                         <div class="profile-trigger" onclick="toggleProfileDropdown()">

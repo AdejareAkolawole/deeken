@@ -13,10 +13,152 @@ $user = getCurrentUser();
 // Require admin access
 requireAdmin();
 
+// Function to create a notification
+function createNotification($conn, $user_id, $message, $type, $order_id) {
+    try {
+        $stmt = $conn->prepare("
+            INSERT INTO notifications (user_id, message, type, order_id, is_read)
+            VALUES (?, ?, ?, ?, 0)
+        ");
+        $stmt->bind_param("issi", $user_id, $message, $type, $order_id);
+        $stmt->execute();
+        $stmt->close();
+        return true;
+    } catch (Exception $e) {
+        error_log("Create notification error: " . $e->getMessage());
+        return false;
+    }
+}
+
 // ----- CART COUNT -----
 $cart_count = getCartCount($conn, $user);
 
 // ----- AJAX HANDLING -----
+
+// Fetch Hero Section
+if (isset($_POST['action']) && $_POST['action'] === 'fetch_hero_section') {
+    $hero = [];
+    try {
+        $result = $conn->query("SELECT id, title, description, button_text, main_image, sparkle_image_1, sparkle_image_2 FROM hero_section LIMIT 1");
+        $hero = $result->fetch_assoc();
+    } catch (Exception $e) {
+        error_log("Fetch hero section error: " . $e->getMessage());
+    }
+    header('Content-Type: application/json');
+    echo json_encode($hero ?: []);
+    exit;
+}
+
+// Update Hero Section
+if (isset($_POST['action']) && $_POST['action'] === 'update_hero_section') {
+    $title = trim($_POST['title']);
+    $description = trim($_POST['description']);
+    $button_text = trim($_POST['button_text']);
+    $existing_main_image = trim($_POST['existing_main_image']);
+    $existing_sparkle_1 = trim($_POST['existing_sparkle_1']);
+    $existing_sparkle_2 = trim($_POST['existing_sparkle_2']);
+    $response = ['success' => false, 'message' => ''];
+
+    if (empty($title) || empty($description) || empty($button_text)) {
+        $response['message'] = 'All text fields are required.';
+    } else {
+        $main_image = $existing_main_image;
+        $sparkle_image_1 = $existing_sparkle_1;
+        $sparkle_image_2 = $existing_sparkle_2;
+        $target_dir = "Uploads/hero/";
+        if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
+
+        // Handle main image upload
+        if (!empty($_FILES['main_image']['name']) && $_FILES['main_image']['error'] === UPLOAD_ERR_OK) {
+            $imageFileType = strtolower(pathinfo($_FILES['main_image']['name'], PATHINFO_EXTENSION));
+            $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
+            if (!in_array($imageFileType, $allowed_types)) {
+                $response['message'] = 'Only JPG, JPEG, PNG, and GIF files are allowed for main image.';
+            } elseif ($_FILES['main_image']['size'] > 5000000) {
+                $response['message'] = 'Main image size exceeds 5MB limit.';
+            } else {
+                $unique_name = uniqid('hero_main_') . '.' . $imageFileType;
+                $target_file = $target_dir . $unique_name;
+                if (move_uploaded_file($_FILES['main_image']['tmp_name'], $target_file)) {
+                    if ($main_image && $main_image !== 'images/hero-couple.png' && file_exists($main_image)) {
+                        unlink($main_image);
+                    }
+                    $main_image = $target_file;
+                } else {
+                    $response['message'] = 'Failed to upload main image.';
+                }
+            }
+        }
+
+        // Handle sparkle image 1 upload
+        if (!$response['message'] && !empty($_FILES['sparkle_image_1']['name']) && $_FILES['sparkle_image_1']['error'] === UPLOAD_ERR_OK) {
+            $imageFileType = strtolower(pathinfo($_FILES['sparkle_image_1']['name'], PATHINFO_EXTENSION));
+            $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
+            if (!in_array($imageFileType, $allowed_types)) {
+                $response['message'] = 'Only JPG, JPEG, PNG, and GIF files are allowed for sparkle image 1.';
+            } elseif ($_FILES['sparkle_image_1']['size'] > 5000000) {
+                $response['message'] = 'Sparkle image 1 size exceeds 5MB limit.';
+            } else {
+                $unique_name = uniqid('hero_sparkle1_') . '.' . $imageFileType;
+                $target_file = $target_dir . $unique_name;
+                if (move_uploaded_file($_FILES['sparkle_image_1']['tmp_name'], $target_file)) {
+                    if ($sparkle_image_1 && $sparkle_image_1 !== 'images/sparkle-1.png' && file_exists($sparkle_image_1)) {
+                        unlink($sparkle_image_1);
+                    }
+                    $sparkle_image_1 = $target_file;
+                } else {
+                    $response['message'] = 'Failed to upload sparkle image 1.';
+                }
+            }
+        }
+
+        // Handle sparkle image 2 upload
+        if (!$response['message'] && !empty($_FILES['sparkle_image_2']['name']) && $_FILES['sparkle_image_2']['error'] === UPLOAD_ERR_OK) {
+            $imageFileType = strtolower(pathinfo($_FILES['sparkle_image_2']['name'], PATHINFO_EXTENSION));
+            $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
+            if (!in_array($imageFileType, $allowed_types)) {
+                $response['message'] = 'Only JPG, JPEG, PNG, and GIF files are allowed for sparkle image 2.';
+            } elseif ($_FILES['sparkle_image_2']['size'] > 5000000) {
+                $response['message'] = 'Sparkle image 2 size exceeds 5MB limit.';
+            } else {
+                $unique_name = uniqid('hero_sparkle2_') . '.' . $imageFileType;
+                $target_file = $target_dir . $unique_name;
+                if (move_uploaded_file($_FILES['sparkle_image_2']['tmp_name'], $target_file)) {
+                    if ($sparkle_image_2 && $sparkle_image_2 !== 'images/sparkle-2.png' && file_exists($sparkle_image_2)) {
+                        unlink($sparkle_image_2);
+                    }
+                    $sparkle_image_2 = $target_file;
+                } else {
+                    $response['message'] = 'Failed to upload sparkle image 2.';
+                }
+            }
+        }
+
+        if (!$response['message']) {
+            $conn->begin_transaction();
+            try {
+                $stmt = $conn->prepare("
+                    UPDATE hero_section 
+                    SET title = ?, description = ?, button_text = ?, main_image = ?, sparkle_image_1 = ?, sparkle_image_2 = ?
+                    WHERE id = 1
+                ");
+                $stmt->bind_param("ssssss", $title, $description, $button_text, $main_image, $sparkle_image_1, $sparkle_image_2);
+                $stmt->execute();
+                $stmt->close();
+                $conn->commit();
+                $response['success'] = true;
+                $response['message'] = 'Hero section updated successfully.';
+            } catch (Exception $e) {
+                $conn->rollback();
+                $response['message'] = 'Failed to update hero section: ' . $e->getMessage();
+                error_log("Hero section update error: " . $e->getMessage());
+            }
+        }
+    }
+    header('Content-Type: application/json');
+    echo json_encode($response);
+    exit;
+}
 
 // Search Products
 if (isset($_POST['action']) && $_POST['action'] === 'search_products') {
@@ -63,6 +205,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'fetch_orders') {
             $stmt = $conn->prepare($query);
             $stmt->bind_param("s", $status);
         } else {
+            $query .= " ORDER BY FIELD(o.status, 'processing', 'pending', 'shipped', 'delivered', 'cancelled')";
             $stmt = $conn->prepare($query);
         }
         $stmt->execute();
@@ -76,6 +219,46 @@ if (isset($_POST['action']) && $_POST['action'] === 'fetch_orders') {
     }
     header('Content-Type: application/json');
     echo json_encode($orders);
+    exit;
+}
+
+// Fetch Order Details
+if (isset($_POST['action']) && $_POST['action'] === 'fetch_order_details') {
+    $order_id = (int)$_POST['order_id'];
+    $order = [];
+    try {
+        // Fetch order and customer info
+        $stmt = $conn->prepare("
+            SELECT o.id, o.user_id, u.full_name, u.email, u.phone, u.address, o.total, o.delivery_fee, o.status, o.created_at
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            WHERE o.id = ?
+        ");
+        $stmt->bind_param("i", $order_id);
+        $stmt->execute();
+        $order['info'] = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        // Fetch order items
+        $stmt = $conn->prepare("
+            SELECT oi.quantity, oi.price, p.name, p.sku
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = ?
+        ");
+        $stmt->bind_param("i", $order_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $order['items'] = [];
+        while ($row = $result->fetch_assoc()) {
+            $order['items'][] = $row;
+        }
+        $stmt->close();
+    } catch (Exception $e) {
+        error_log("Fetch order details error: " . $e->getMessage());
+    }
+    header('Content-Type: application/json');
+    echo json_encode($order);
     exit;
 }
 
@@ -551,17 +734,56 @@ if (isset($_POST['action']) && $_POST['action'] === 'delete_user') {
 // Ship Order
 if (isset($_POST['action']) && $_POST['action'] === 'ship_order') {
     $order_id = (int)$_POST['order_id'];
+    $estimated_delivery_days = isset($_POST['estimated_delivery_days']) ? (int)$_POST['estimated_delivery_days'] : 0;
     $response = ['success' => false, 'message' => ''];
-    try {
-        $stmt = $conn->prepare("UPDATE orders SET status = 'shipped' WHERE id = ?");
-        $stmt->bind_param("i", $order_id);
-        $stmt->execute();
-        $stmt->close();
-        $response['success'] = true;
-        $response['message'] = 'Order marked as shipped.';
-    } catch (Exception $e) {
-        $response['message'] = 'Failed to ship order: ' . $e->getMessage();
-        error_log("Order ship error: " . $e->getMessage());
+
+    // Validate inputs
+    if ($order_id <= 0) {
+        $response['message'] = 'Invalid order ID.';
+    } elseif ($estimated_delivery_days <= 0) {
+        $response['message'] = 'Estimated delivery days must be a positive number.';
+    } else {
+        $conn->begin_transaction();
+        try {
+            // Check if order exists and is in 'processing' status
+            $stmt = $conn->prepare("SELECT user_id, status FROM orders WHERE id = ?");
+            $stmt->bind_param("i", $order_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if (!$order = $result->fetch_assoc()) {
+                throw new Exception("Order not found.");
+            }
+            if ($order['status'] !== 'processing') {
+                throw new Exception("Order is not in a shippable state.");
+            }
+            $stmt->close();
+
+            // Update order status and delivery days
+            $stmt = $conn->prepare("
+                UPDATE orders 
+                SET status = 'shipped', estimated_delivery_days = ?
+                WHERE id = ?
+            ");
+            $stmt->bind_param("ii", $estimated_delivery_days, $order_id);
+            if (!$stmt->execute()) {
+                throw new Exception("Failed to update order status.");
+            }
+            $stmt->close();
+
+            // Create notification
+            $message = "Order Received and Ready to Ship. Package will be delivered in $estimated_delivery_days days.";
+            if (!createNotification($conn, $order['user_id'], $message, 'shipped', $order_id)) {
+                throw new Exception("Failed to create notification.");
+            }
+
+            $conn->commit();
+            $response['success'] = true;
+            $response['message'] = 'Order marked as shipped and notification sent.';
+        } catch (Exception $e) {
+            $conn->rollback();
+            $response['message'] = 'Failed to ship order: ' . $e->getMessage();
+            error_log("Order ship error: " . $e->getMessage());
+        }
     }
     header('Content-Type: application/json');
     echo json_encode($response);
@@ -637,6 +859,9 @@ $total_stock = $conn->query("SELECT SUM(stock_quantity) as sum FROM inventory")-
 $pending_orders = $conn->query("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'")->fetch_assoc()['count'] ?? 0;
 
 // ----- FETCH DATA FOR TABLES -----
+
+$hero_section = $conn->query("SELECT id, title, description, button_text, main_image, sparkle_image_1, sparkle_image_2 FROM hero_section LIMIT 1")->fetch_assoc() ?? [];
+
 $products = [];
 $result = $conn->query("
     SELECT p.id, p.name, p.sku, p.price, p.description, i.stock_quantity, p.image, c.name AS category, ma.attribute AS misc_attribute, p.featured
@@ -666,6 +891,7 @@ $result = $conn->query("
     SELECT o.id, o.user_id, u.full_name, o.total, o.delivery_fee, o.status, o.created_at, o.address_id
     FROM orders o
     JOIN users u ON o.user_id = u.id
+    ORDER BY FIELD(o.status, 'processing', 'pending', 'shipped', 'delivered', 'cancelled')
 ");
 while ($row = $result->fetch_assoc()) {
     $orders[] = $row;
@@ -698,6 +924,7 @@ while ($row = $result->fetch_assoc()) {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+       
         :root {
             --primary-color: #3b82f6;
             --secondary-color: #8b5cf6;
@@ -712,6 +939,7 @@ while ($row = $result->fetch_assoc()) {
             --warning-color: #f59e0b;
             --danger-color: #ef4444;
             --sidebar-width: 280px;
+            --font-size-base: 16px;
         }
 
         [data-theme="dark"] {
@@ -727,15 +955,16 @@ while ($row = $result->fetch_assoc()) {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-             font-family: 'Poppins', sans-serif;
+            font-family: 'Poppins', sans-serif;
         }
 
         body {
-           font-family: 'Poppins', sans-serif;
+            font-family: 'Poppins', sans-serif;
             background: linear-gradient(135deg, var(--background-color), var(--surface-color));
             color: var(--text-primary);
             transition: all 0.3s ease;
             min-height: 100vh;
+            font-size: var(--font-size-base);
         }
 
         .admin-container {
@@ -755,20 +984,20 @@ while ($row = $result->fetch_assoc()) {
         }
 
         .sidebar-header {
-            padding: 2rem 1.5rem;
+            padding: 1.5rem;
             border-bottom: 1px solid rgba(255,255,255,0.1);
             text-align: center;
         }
 
         .sidebar-header h1 {
-            font-size: 1.5rem;
+            font-size: clamp(1.2rem, 2.5vw, 1.5rem);
             font-weight: 700;
             margin-bottom: 0.5rem;
         }
 
         .sidebar-header p {
             opacity: 0.8;
-            font-size: 0.9rem;
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
         }
 
         .nav-menu {
@@ -785,7 +1014,7 @@ while ($row = $result->fetch_assoc()) {
         .nav-link {
             display: flex;
             align-items: center;
-            padding: 1rem 1.5rem;
+            padding: 1rem;
             color: rgba(255,255,255,0.8);
             text-decoration: none;
             transition: all 0.3s ease;
@@ -794,6 +1023,7 @@ while ($row = $result->fetch_assoc()) {
             background: none;
             width: 100%;
             text-align: left;
+            font-size: clamp(0.9rem, 2vw, 1rem);
         }
 
         .nav-link:hover, .nav-link.active {
@@ -804,7 +1034,7 @@ while ($row = $result->fetch_assoc()) {
 
         .nav-link i {
             margin-right: 1rem;
-            font-size: 1.1rem;
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
             width: 20px;
             text-align: center;
         }
@@ -812,20 +1042,17 @@ while ($row = $result->fetch_assoc()) {
         /* Main Content */
         .main-content {
             flex: 1;
-            padding: 2rem;
+            padding: clamp(1rem, 3vw, 2rem);
             overflow-y: auto;
             background: var(--background-color);
         }
 
         .top-bar {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: var(--text-primary);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 2rem;
-            padding: 1rem 2rem;
+            margin-bottom: clamp(1rem, 2vw, 2rem);
+            padding: clamp(0.8rem, 2vw, 1rem) clamp(1rem, 3vw, 2rem);
             background: var(--card-color);
             border-radius: 16px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.05);
@@ -833,34 +1060,35 @@ while ($row = $result->fetch_assoc()) {
         }
 
         .page-title {
-            font-size: 1.8rem;
+            font-size: clamp(1.4rem, 3vw, 1.8rem);
             font-weight: 700;
             color: var(--text-primary);
         }
 
         .top-actions {
             display: flex;
-            gap: 1rem;
+            gap: clamp(0.5rem, 1.5vw, 1rem);
             align-items: center;
         }
 
-        .theme-toggle {
+        .theme-toggle, .home-link {
             background: var(--surface-color);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 0.5rem;
+            padding: clamp(0.4rem, 1vw, 0.5rem);
             cursor: pointer;
             color: var(--text-primary);
             transition: all 0.3s ease;
+            font-size: clamp(0.9rem, 2vw, 1rem);
         }
 
-        .theme-toggle:hover {
+        .theme-toggle:hover, .home-link:hover {
             background: var(--primary-color);
             color: white;
         }
 
         .btn {
-            padding: 0.75rem 1.5rem;
+            padding: clamp(0.5rem, 1.5vw, 0.75rem) clamp(1rem, 2vw, 1.5rem);
             border: none;
             border-radius: 8px;
             cursor: pointer;
@@ -870,6 +1098,7 @@ while ($row = $result->fetch_assoc()) {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
+            font-size: clamp(0.85rem, 2vw, 0.95rem);
         }
 
         .btn-primary {
@@ -910,14 +1139,14 @@ while ($row = $result->fetch_assoc()) {
         /* Dashboard Cards */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
+            grid-template-columns: repeat(auto-fit, minmax(clamp(200px, 30vw, 250px), 1fr));
+            gap: clamp(1rem, 2vw, 1.5rem);
+            margin-bottom: clamp(1rem, 2vw, 2rem);
         }
 
         .dashboard-card {
             background: var(--card-color);
-            padding: 1.5rem;
+            padding: clamp(1rem, 2vw, 1.5rem);
             border-radius: 16px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.05);
             border: 1px solid var(--border-color);
@@ -933,36 +1162,36 @@ while ($row = $result->fetch_assoc()) {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
         }
 
         .card-title {
-            font-size: 0.9rem;
+            font-size: clamp(0.8rem, 1.8vw, 0.9rem);
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .card-icon {
-            width: 40px;
-            height: 40px;
+            width: clamp(30px, 5vw, 40px);
+            height: clamp(30px, 5vw, 40px);
             border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
+            font-size: clamp(0.9rem, 2vw, 1.2rem);
             color: white;
         }
 
         .card-value {
-            font-size: 2rem;
+            font-size: clamp(1.5rem, 3vw, 2rem);
             font-weight: 700;
             color: var(--text-primary);
             margin-bottom: 0.5rem;
         }
 
         .card-change {
-            font-size: 0.8rem;
+            font-size: clamp(0.7rem, 1.5vw, 0.8rem);
             display: flex;
             align-items: center;
             gap: 0.25rem;
@@ -980,22 +1209,24 @@ while ($row = $result->fetch_assoc()) {
         .table-container {
             background: var(--card-color);
             border-radius: 16px;
-            overflow: hidden;
+            overflow-x: auto;
             box-shadow: 0 4px 20px rgba(0,0,0,0.05);
             border: 1px solid var(--border-color);
-            margin-bottom: 2rem;
+            margin-bottom: clamp(1rem, 2vw, 2rem);
         }
 
         .table-header {
-            padding: 1.5rem;
+            padding: clamp(1rem, 2vw, 1.5rem);
             border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
         }
 
         .table-title {
-            font-size: 1.2rem;
+            font-size: clamp(1rem, 2.2vw, 1.2rem);
             font-weight: 600;
             color: var(--text-primary);
         }
@@ -1003,18 +1234,23 @@ while ($row = $result->fetch_assoc()) {
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 600px;
         }
 
         th, td {
-            padding: 1rem 1.5rem;
+            padding: clamp(0.8rem, 1.5vw, 1rem) clamp(1rem, 2vw, 1.5rem);
             text-align: left;
             border-bottom: 1px solid var(--border-color);
+            font-size: clamp(0.85rem, 1.8vw, 0.95rem);
         }
 
         th {
             background: var(--surface-color);
             font-weight: 600;
             color: var(--text-primary);
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
         td {
@@ -1028,12 +1264,12 @@ while ($row = $result->fetch_assoc()) {
         /* Forms */
         .form-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
+            grid-template-columns: repeat(auto-fit, minmax(clamp(250px, 40vw, 300px), 1fr));
+            gap: clamp(1rem, 2vw, 2rem);
         }
 
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: clamp(1rem, 2vw, 1.5rem);
         }
 
         .form-label {
@@ -1041,16 +1277,17 @@ while ($row = $result->fetch_assoc()) {
             margin-bottom: 0.5rem;
             font-weight: 600;
             color: var(--text-primary);
+            font-size: clamp(0.85rem, 1.8vw, 0.95rem);
         }
 
         .form-input {
             width: 100%;
-            padding: 0.75rem 1rem;
+            padding: clamp(0.6rem, 1.2vw, 0.75rem) clamp(0.8rem, 1.5vw, 1rem);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background: var(--background-color);
             color: var(--text-primary);
-            font-size: 1rem;
+            font-size: clamp(0.85rem, 1.8vw, 0.95rem);
             transition: all 0.3s ease;
         }
 
@@ -1061,9 +1298,9 @@ while ($row = $result->fetch_assoc()) {
         }
 
         .status-badge {
-            padding: 0.25rem 0.75rem;
+            padding: clamp(0.2rem, 0.5vw, 0.25rem) clamp(0.5rem, 1vw, 0.75rem);
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: clamp(0.7rem, 1.5vw, 0.8rem);
             font-weight: 600;
             text-transform: uppercase;
         }
@@ -1114,23 +1351,24 @@ while ($row = $result->fetch_assoc()) {
 
         .modal-content {
             background: var(--card-color);
-            padding: 2rem;
+            padding: clamp(1rem, 2vw, 2rem);
             border-radius: 16px;
-            max-width: 500px;
+            max-width: clamp(400px, 80vw, 600px);
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
         }
 
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1.5rem;
+            margin-bottom: clamp(1rem, 2vw, 1.5rem);
         }
 
         .modal-title {
-            font-size: 1.3rem;
+            font-size: clamp(1.1rem, 2.5vw, 1.3rem);
             font-weight: 700;
             color: var(--text-primary);
         }
@@ -1138,19 +1376,20 @@ while ($row = $result->fetch_assoc()) {
         .modal-close {
             background: none;
             border: none;
-            font-size: 1.5rem;
+            font-size: clamp(1.2rem, 2.5vw, 1.5rem);
             cursor: pointer;
             color: var(--text-secondary);
         }
 
         /* Alerts */
         .alert {
-            padding: 1rem;
+            padding: clamp(0.8rem, 1.5vw, 1rem);
             border-radius: 8px;
-            margin-bottom: 1rem;
+            margin-bottom: clamp(0.8rem, 1.5vw, 1rem);
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            font-size: clamp(0.85rem, 1.8vw, 0.95rem);
         }
 
         .alert-success {
@@ -1165,36 +1404,134 @@ while ($row = $result->fetch_assoc()) {
 
         .alert-dismiss {
             cursor: pointer;
-            font-size: 1.2rem;
+            font-size: clamp(1rem, 2vw, 1.2rem);
         }
 
         /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
-                width: 70px;
+                width: 60px;
             }
-            
+
             .sidebar-header h1,
             .sidebar-header p,
             .nav-link span {
                 display: none;
             }
-            
+
             .nav-link {
                 justify-content: center;
+                padding: 0.75rem;
             }
-            
+
             .nav-link i {
                 margin-right: 0;
+                font-size: 1.5rem;
             }
-            
+
             .main-content {
-                padding: 1rem;
+                padding: 0.75rem;
             }
-            
+
             .dashboard-grid {
                 grid-template-columns: 1fr;
             }
+
+            .top-bar {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .top-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+
+            .table-container {
+                overflow-x: auto;
+            }
+
+            table {
+                min-width: 100%;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-content {
+                width: 95%;
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                font-size: 14px;
+            }
+
+            .page-title {
+                font-size: 1.2rem;
+            }
+
+            .btn {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.8rem;
+            }
+
+            .dashboard-card {
+                padding: 0.75rem;
+            }
+
+            .card-value {
+                font-size: 1.5rem;
+            }
+
+            .nav-link i {
+                font-size: 1.3rem;
+            }
+        }
+
+        .hero-preview {
+            background: var(--surface-color);
+            padding: clamp(1rem, 2vw, 1.5rem);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin-top: 0.5rem;
+        }
+
+        .hero-preview h1 {
+            font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .hero-preview p {
+            font-size: clamp(0.85rem, 1.8vw, 0.95rem);
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .hero-preview .cta-button {
+            background: var(--primary-color);
+            color: white;
+            padding: clamp(0.5rem, 1vw, 0.75rem) clamp(1rem, 2vw, 1.5rem);
+            border-radius: 8px;
+            border: none;
+            cursor: default;
+            font-size: clamp(0.85rem, 1.8vw, 0.95rem);
+        }
+
+        .hero-image-preview {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .btn-loading {
+            opacity: 0.7;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -1231,6 +1568,9 @@ while ($row = $result->fetch_assoc()) {
                 <div class="nav-item">
                     <button class="nav-link" data-tab="settings"><i class="fas fa-cog"></i><span>Settings</span></button>
                 </div>
+                <div class="nav-item">
+                    <button class="nav-link" data-tab="hero"><i class="fas fa-image"></i><span>Hero Section</span></button>
+                </div>
             </nav>
         </div>
 
@@ -1240,6 +1580,9 @@ while ($row = $result->fetch_assoc()) {
             <div class="top-bar">
                 <h1 class="page-title" id="pageTitle">Dashboard</h1>
                 <div class="top-actions">
+                    <a href="index.php" class="home-link">
+                        <i class="fas fa-home"></i>
+                    </a>
                     <button class="theme-toggle" onclick="toggleTheme()">
                         <i class="fas fa-moon" id="themeIcon"></i>
                     </button>
@@ -1362,7 +1705,7 @@ while ($row = $result->fetch_assoc()) {
                                     <td>#<?php echo htmlspecialchars($order['id']); ?></td>
                                     <td><?php echo htmlspecialchars($order['full_name']); ?></td>
                                     <td>$<?php echo number_format($order['total'], 2); ?></td>
-                                    <td><span class="status-badge status-<?php echo htmlspecialchars(strtolower($order['status'])); ?>"><?php echo htmlspecialchars($order['status']); ?></span></td>
+                                    <td><span class="status-badge status-<?php echo htmlspecialchars(strtolower($order['status'] === 'processing' ? 'pending' : $order['status'])); ?>"><?php echo htmlspecialchars($order['status'] === 'processing' ? 'Pending' : $order['status']); ?></span></td>
                                     <td><?php echo htmlspecialchars(date('M d, Y', strtotime($order['created_at']))); ?></td>
                                     <td>
                                         <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="viewOrder(<?php echo htmlspecialchars($order['id']); ?>)">View</button>
@@ -1383,15 +1726,16 @@ while ($row = $result->fetch_assoc()) {
                             <i class="fas fa-plus"></i> Add Product
                         </button>
                     </div>
-                    <table>
+                                        <table>
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Name</th>
                                 <th>SKU</th>
                                 <th>Price</th>
-                                <th>Category</th>
                                 <th>Stock</th>
+                                <th>Category</th>
+                                <th>Featured</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -1402,11 +1746,58 @@ while ($row = $result->fetch_assoc()) {
                                     <td><?php echo htmlspecialchars($product['name']); ?></td>
                                     <td><?php echo htmlspecialchars($product['sku']); ?></td>
                                     <td>$<?php echo number_format($product['price'], 2); ?></td>
-                                    <td><?php echo htmlspecialchars($product['category']); ?></td>
                                     <td><?php echo htmlspecialchars($product['stock_quantity']); ?></td>
+                                    <td><?php echo htmlspecialchars($product['category']); ?></td>
+                                    <td><?php echo $product['featured'] ? 'Yes' : 'No'; ?></td>
                                     <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick='editProduct(<?php echo json_encode($product, JSON_HEX_QUOT | JSON_HEX_APOS); ?>)'>Edit</button>
+                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editProduct(<?php echo htmlspecialchars($product['id']); ?>)">Edit</button>
                                         <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteProduct(<?php echo htmlspecialchars($product['id']); ?>)">Delete</button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Orders Tab -->
+            <div class="tab-content" id="orders">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3 class="table-title">Orders Management</h3>
+                        <select id="orderStatusFilter" onchange="fetchOrders()">
+                            <option value="all">All Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="processing">Processing</option>
+                            <option value="shipped">Shipped</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer</th>
+                                <th>Total</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordersTable">
+                            <?php foreach ($orders as $order): ?>
+                                <tr>
+                                    <td>#<?php echo htmlspecialchars($order['id']); ?></td>
+                                    <td><?php echo htmlspecialchars($order['full_name']); ?></td>
+                                    <td>$<?php echo number_format($order['total'], 2); ?></td>
+                                    <td><span class="status-badge status-<?php echo htmlspecialchars(strtolower($order['status'])); ?>"><?php echo htmlspecialchars($order['status']); ?></span></td>
+                                    <td><?php echo htmlspecialchars(date('M d, Y', strtotime($order['created_at']))); ?></td>
+                                    <td>
+                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="viewOrder(<?php echo htmlspecialchars($order['id']); ?>)">View</button>
+                                        <?php if ($order['status'] === 'processing'): ?>
+                                            <button class="btn btn-success" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="shipOrder(<?php echo htmlspecialchars($order['id']); ?>)">Ship</button>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1430,7 +1821,7 @@ while ($row = $result->fetch_assoc()) {
                                 <th>ID</th>
                                 <th>Name</th>
                                 <th>Description</th>
-                                <th>Created</th>
+                                <th>Created At</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -1439,61 +1830,11 @@ while ($row = $result->fetch_assoc()) {
                                 <tr>
                                     <td><?php echo htmlspecialchars($category['id']); ?></td>
                                     <td><?php echo htmlspecialchars($category['name']); ?></td>
-                                    <td><?php echo htmlspecialchars($category['description'] ?: 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($category['description']); ?></td>
                                     <td><?php echo htmlspecialchars(date('M d, Y', strtotime($category['created_at']))); ?></td>
                                     <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editCategory(<?php echo htmlspecialchars($category['id']); ?>, '<?php echo htmlspecialchars($category['name']); ?>', '<?php echo htmlspecialchars($category['description']); ?>')">Edit</button>
+                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editCategory(<?php echo htmlspecialchars($category['id']); ?>)">Edit</button>
                                         <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteCategory(<?php echo htmlspecialchars($category['id']); ?>)">Delete</button>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Orders Tab -->
-            <div class="tab-content" id="orders">
-                <div class="table-container">
-                    <div class="table-header">
-                        <h3 class="table-title">Orders Management</h3>
-                        <div>
-                            <select class="form-input" style="width: auto; margin-right: 1rem;" onchange="filterOrders(this.value)">
-                                <option value="all">All Status</option>
-                                <option value="pending">Pending</option>
-                                <option value="processing">Processing</option>
-                                <option value="shipped">Shipped</option>
-                                <option value="delivered">Delivered</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
-                        </div>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Order ID</th>
-                                <th>Customer</th>
-                                <th>Total</th>
-                                <th>Delivery Fee</th>
-                                <th>Status</th>
-                                <th>Date</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ordersTable">
-                            <?php foreach ($orders as $order): ?>
-                                <tr>
-                                    <td>#<?php echo htmlspecialchars($order['id']); ?></td>
-                                    <td><?php echo htmlspecialchars($order['full_name']); ?></td>
-                                    <td>$<?php echo number_format($order['total'], 2); ?></td>
-                                    <td>$<?php echo number_format($order['delivery_fee'], 2); ?></td>
-                                    <td><span class="status-badge status-<?php echo htmlspecialchars(strtolower($order['status'])); ?>"><?php echo htmlspecialchars($order['status']); ?></span></td>
-                                    <td><?php echo htmlspecialchars(date('M d, Y', strtotime($order['created_at']))); ?></td>
-                                    <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="viewOrder(<?php echo htmlspecialchars($order['id']); ?>)">View</button>
-                                        <?php if ($order['status'] === 'processing'): ?>
-                                            <button class="btn btn-success" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="shipOrder(<?php echo htmlspecialchars($order['id']); ?>)">Ship</button>
-                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1516,25 +1857,25 @@ while ($row = $result->fetch_assoc()) {
                             <tr>
                                 <th>ID</th>
                                 <th>Email</th>
-                                <th>Name</th>
+                                <th>Full Name</th>
                                 <th>Phone</th>
                                 <th>Role</th>
-                                <th>Created</th>
+                                <th>Created At</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="usersTable">
-                            <?php foreach ($users as $user_item): ?>
+                            <?php foreach ($users as $user): ?>
                                 <tr>
-                                    <td><?php echo htmlspecialchars($user_item['id']); ?></td>
-                                    <td><?php echo htmlspecialchars($user_item['email']); ?></td>
-                                    <td><?php echo htmlspecialchars($user_item['full_name']); ?></td>
-                                    <td><?php echo htmlspecialchars($user_item['phone']); ?></td>
-                                    <td><?php echo $user_item['is_admin'] ? 'Admin' : 'Customer'; ?></td>
-                                    <td><?php echo htmlspecialchars(date('M d, Y', strtotime($user_item['created_at']))); ?></td>
+                                    <td><?php echo htmlspecialchars($user['id']); ?></td>
+                                    <td><?php echo htmlspecialchars($user['email']); ?></td>
+                                    <td><?php echo htmlspecialchars($user['full_name']); ?></td>
+                                    <td><?php echo htmlspecialchars($user['phone']); ?></td>
+                                    <td><?php echo $user['is_admin'] ? 'Admin' : 'User'; ?></td>
+                                    <td><?php echo htmlspecialchars(date('M d, Y', strtotime($user['created_at']))); ?></td>
                                     <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick='editUser(<?php echo json_encode($user_item, JSON_HEX_QUOT | JSON_HEX_APOS); ?>)'>Edit</button>
-                                        <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteUser(<?php echo htmlspecialchars($user_item['id']); ?>)">Delete</button>
+                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editUser(<?php echo htmlspecialchars($user['id']); ?>)">Edit</button>
+                                        <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteUser(<?php echo htmlspecialchars($user['id']); ?>)">Delete</button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1548,17 +1889,13 @@ while ($row = $result->fetch_assoc()) {
                 <div class="table-container">
                     <div class="table-header">
                         <h3 class="table-title">Inventory Management</h3>
-                        <button class="btn btn-primary" onclick="refreshInventory()">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
                     </div>
                     <table>
                         <thead>
                             <tr>
                                 <th>Product ID</th>
-                                <th>Name</th>
+                                <th>Product Name</th>
                                 <th>Stock Quantity</th>
-                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -1569,14 +1906,7 @@ while ($row = $result->fetch_assoc()) {
                                     <td><?php echo htmlspecialchars($item['name']); ?></td>
                                     <td><?php echo htmlspecialchars($item['stock_quantity']); ?></td>
                                     <td>
-                                        <?php if ($item['stock_quantity'] <= 5): ?>
-                                            <span class="status-badge status-warning">Low Stock</span>
-                                        <?php else: ?>
-                                            <span class="status-badge status-delivered">In Stock</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editProduct(<?php echo htmlspecialchars(json_encode($products[array_search($item['id'], array_column($products, 'id'))], JSON_HEX_QUOT | JSON_HEX_APOS)); ?>)">Edit</button>
+                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editProduct(<?php echo htmlspecialchars($item['id']); ?>)">Edit</button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1590,28 +1920,27 @@ while ($row = $result->fetch_assoc()) {
                 <div class="table-container">
                     <div class="table-header">
                         <h3 class="table-title">Reviews Management</h3>
-                        <button class="btn btn-primary" onclick="refreshReviews()">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
                     </div>
                     <table>
                         <thead>
                             <tr>
+                                <th>ID</th>
                                 <th>Product</th>
                                 <th>User</th>
                                 <th>Rating</th>
                                 <th>Review</th>
-                                <th>Date</th>
+                                <th>Created At</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="reviewsTable">
                             <?php foreach ($reviews as $review): ?>
                                 <tr>
+                                    <td><?php echo htmlspecialchars($review['id']); ?></td>
                                     <td><?php echo htmlspecialchars($review['product_name']); ?></td>
                                     <td><?php echo htmlspecialchars($review['full_name']); ?></td>
                                     <td><?php echo htmlspecialchars($review['rating']); ?>/5</td>
-                                    <td><?php echo htmlspecialchars(substr($review['review_text'], 0, 50) . '...'); ?></td>
+                                    <td><?php echo htmlspecialchars($review['review_text']); ?></td>
                                     <td><?php echo htmlspecialchars(date('M d, Y', strtotime($review['created_at']))); ?></td>
                                     <td>
                                         <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteReview(<?php echo htmlspecialchars($review['id']); ?>)">Delete</button>
@@ -1627,68 +1956,103 @@ while ($row = $result->fetch_assoc()) {
             <div class="tab-content" id="settings">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Security Settings</h3>
+                        <h3 class="table-title">Settings</h3>
                     </div>
-                    <?php if (isset($success_security)): ?>
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle"></i>
-                            <?php echo htmlspecialchars($success_security); ?>
-                            <span class="alert-dismiss" onclick="dismissAlert(this)">×</span>
+                    <form id="changePasswordForm" onsubmit="event.preventDefault(); changePassword();">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label" for="currentPassword">Current Password</label>
+                                <input type="password" id="currentPassword" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="newPassword">New Password</label>
+                                <input type="password" id="newPassword" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="confirmPassword">Confirm Password</label>
+                                <input type="password" id="confirmPassword" class="form-input" required>
+                            </div>
                         </div>
-                    <?php elseif (isset($error_security)): ?>
-                        <div class="alert alert-error">
-                            <i class="fas fa-exclamation-circle"></i>
-                            <?php echo htmlspecialchars($error_security); ?>
-                            <span class="alert-dismiss" onclick="dismissAlert(this)">×</span>
+                        <button type="submit" class="btn btn-primary">Change Password</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Hero Section Tab -->
+            <div class="tab-content" id="hero">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3 class="table-title">Hero Section Management</h3>
+                    </div>
+                    <form id="heroForm" onsubmit="event.preventDefault(); updateHeroSection();">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label" for="heroTitle">Title</label>
+                                <input type="text" id="heroTitle" class="form-input" value="<?php echo htmlspecialchars($hero_section['title'] ?? ''); ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="heroDescription">Description</label>
+                                <textarea id="heroDescription" class="form-input" rows="4" required><?php echo htmlspecialchars($hero_section['description'] ?? ''); ?></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="heroButtonText">Button Text</label>
+                                <input type="text" id="heroButtonText" class="form-input" value="<?php echo htmlspecialchars($hero_section['button_text'] ?? ''); ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="heroMainImage">Main Image</label>
+                                <input type="file" id="heroMainImage" class="form-input" accept="image/*">
+                                <input type="hidden" id="existingMainImage" value="<?php echo htmlspecialchars($hero_section['main_image'] ?? ''); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="heroSparkleImage1">Sparkle Image 1</label>
+                                <input type="file" id="heroSparkleImage1" class="form-input" accept="image/*">
+                                <input type="hidden" id="existingSparkle1" value="<?php echo htmlspecialchars($hero_section['sparkle_image_1'] ?? ''); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="heroSparkleImage2">Sparkle Image 2</label>
+                                <input type="file" id="heroSparkleImage2" class="form-input" accept="image/*">
+                                <input type="hidden" id="existingSparkle2" value="<?php echo htmlspecialchars($hero_section['sparkle_image_2'] ?? ''); ?>">
+                            </div>
                         </div>
-                    <?php endif; ?>
-                    <form class="form-grid" id="passwordForm">
-                        <div class="form-group">
-                            <label class="form-label">Current Password</label>
-                            <input type="password" class="form-input" id="currentPassword" required>
+                        <div class="hero-preview">
+                            <h1 id="heroTitlePreview"><?php echo htmlspecialchars($hero_section['title'] ?? 'Your Title'); ?></h1>
+                            <p id="heroDescriptionPreview"><?php echo htmlspecialchars($hero_section['description'] ?? 'Your Description'); ?></p>
+                            <button class="cta-button" id="heroButtonPreview"><?php echo htmlspecialchars($hero_section['button_text'] ?? 'Shop Now'); ?></button>
+                            <div class="hero-image-preview">
+                                <img id="heroMainImagePreview" src="<?php echo htmlspecialchars($hero_section['main_image'] ?? 'https://via.placeholder.com/150'); ?>" alt="Main Image" style="width: 100px; height: auto;">
+                                <img id="heroSparkle1Preview" src="<?php echo htmlspecialchars($hero_section['sparkle_image_1'] ?? 'https://via.placeholder.com/50'); ?>" alt="Sparkle 1" style="width: 50px; height: auto;">
+                                <img id="heroSparkle2Preview" src="<?php echo htmlspecialchars($hero_section['sparkle_image_2'] ?? 'https://via.placeholder.com/50'); ?>" alt="Sparkle 2" style="width: 50px; height: auto;">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">New Password</label>
-                            <input type="password" class="form-input" id="newPassword" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Confirm New Password</label>
-                            <input type="password" class="form-input" id="confirmPassword" required>
-                        </div>
-                        <div class="form-group">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-lock"></i> Change Password
-                            </button>
-                        </div>
+                        <button type="submit" class="btn btn-primary">Update Hero Section</button>
                     </form>
                 </div>
             </div>
 
             <!-- Modals -->
+            <!-- Add Product Modal -->
             <div class="modal" id="addProductModal">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3 class="modal-title">Add Product</h3>
-                        <button class="modal-close" onclick="closeModal('addProductModal')">&times;</button>
+                        <button class="modal-close" onclick="closeModal('addProductModal')">×</button>
                     </div>
-                    <form id="productForm" enctype="multipart/form-data" class="form-grid">
-                        <input type="hidden" id="productId">
-                        <input type="hidden" id="existingImage">
+                    <form id="addProductForm" onsubmit="event.preventDefault(); addProduct();">
                         <div class="form-group">
-                            <label class="form-label">Product Name</label>
-                            <input type="text" class="form-input" id="productName" required>
+                            <label class="form-label" for="productName">Product Name</label>
+                            <input type="text" id="productName" class="form-input" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Price ($)</label>
-                            <input type="number" class="form-input" id="productPrice" step="0.01" min="0" required>
+                            <label class="form-label" for="productPrice">Price</label>
+                            <input type="number" id="productPrice" class="form-input" step="0.01" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Stock Quantity</label>
-                            <input type="number" class="form-input" id="productStock" min="0" required>
+                            <label class="form-label" for="productStock">Stock Quantity</label>
+                            <input type="number" id="productStock" class="form-input" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Category</label>
-                            <select class="form-input" id="productCategory" required>
+                            <label class="form-label" for="productCategory">Category</label>
+                            <select id="productCategory" class="form-input" required>
                                 <option value="">Select Category</option>
                                 <?php foreach ($categories as $category): ?>
                                     <option value="<?php echo htmlspecialchars($category['id']); ?>"><?php echo htmlspecialchars($category['name']); ?></option>
@@ -1696,8 +2060,8 @@ while ($row = $result->fetch_assoc()) {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Miscellaneous Attribute</label>
-                            <select class="form-input" id="productMiscAttribute">
+                            <label class="form-label" for="productMiscAttribute">Miscellaneous Attribute</label>
+                            <select id="productMiscAttribute" class="form-input">
                                 <option value="">None</option>
                                 <option value="new_arrival">New Arrival</option>
                                 <option value="featured">Featured</option>
@@ -1705,143 +2069,252 @@ while ($row = $result->fetch_assoc()) {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Featured Product</label>
+                            <label class="form-label" for="productFeatured">Featured</label>
                             <input type="checkbox" id="productFeatured">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Product Image</label>
-                            <input type="file" class="form-input" id="productImage" accept="image/*">
-                            <img id="imagePreview" src="" alt="Image Preview" style="display: none; margin-top: 0.5rem; max-width: 100%;">
+                            <label class="form-label" for="productDescription">Description</label>
+                            <textarea id="productDescription" class="form-input" rows="4"></textarea>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Description</label>
-                            <textarea class="form-input" id="productDescription" rows="4"></textarea>
+                            <label class="form-label" for="productImage">Image</label>
+                            <input type="file" id="productImage" class="form-input" accept="image/*">
                         </div>
-                        <div class="form-group">
-                            <button type="submit" class="btn btn-primary">Save Product</button>
-                            <button type="button" class="btn btn-secondary" onclick="closeModal('addProductModal')">Cancel</button>
-                        </div>
+                        <button type="submit" class="btn btn-primary">Add Product</button>
                     </form>
                 </div>
             </div>
 
+            <!-- Edit Product Modal -->
+            <div class="modal" id="editProductModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title">Edit Product</h3>
+                        <button class="modal-close" onclick="closeModal('editProductModal')">×</button>
+                    </div>
+                    <form id="editProductForm" onsubmit="event.preventDefault(); updateProduct();">
+                        <input type="hidden" id="editProductId">
+                        <div class="form-group">
+                            <label class="form-label" for="editProductName">Product Name</label>
+                            <input type="text" id="editProductName" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editProductPrice">Price</label>
+                            <input type="number" id="editProductPrice" class="form-input" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editProductStock">Stock Quantity</label>
+                            <input type="number" id="editProductStock" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editProductCategory">Category</label>
+                            <select id="editProductCategory" class="form-input" required>
+                                <option value="">Select Category</option>
+                                <?php foreach ($categories as $category): ?>
+                                    <option value="<?php echo htmlspecialchars($category['id']); ?>"><?php echo htmlspecialchars($category['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editProductMiscAttribute">Miscellaneous Attribute</label>
+                            <select id="editProductMiscAttribute" class="form-input">
+                                <option value="">None</option>
+                                <option value="new_arrival">New Arrival</option>
+                                <option value="featured">Featured</option>
+                                <option value="trending">Trending</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editProductFeatured">Featured</label>
+                            <input type="checkbox" id="editProductFeatured">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editProductDescription">Description</label>
+                            <textarea id="editProductDescription" class="form-input" rows="4"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editProductImage">Image</label>
+                            <input type="file" id="editProductImage" class="form-input" accept="image/*">
+                            <input type="hidden" id="existingProductImage">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Product</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Add Category Modal -->
             <div class="modal" id="addCategoryModal">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3 class="modal-title">Add Category</h3>
-                        <button class="modal-close" onclick="closeModal('addCategoryModal')">&times;</button>
+                        <button class="modal-close" onclick="closeModal('addCategoryModal')">×</button>
                     </div>
-                    <form id="categoryForm" class="form-grid">
-                        <input type="hidden" id="categoryId">
+                    <form id="addCategoryForm" onsubmit="event.preventDefault(); addCategory();">
                         <div class="form-group">
-                            <label class="form-label">Category Name</label>
-                            <input type="text" class="form-input" id="categoryName" required>
+                            <label class="form-label" for="categoryName">Category Name</label>
+                            <input type="text" id="categoryName" class="form-input" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Description</label>
-                            <textarea class="form-input" id="categoryDescription" rows="4"></textarea>
+                            <label class="form-label" for="categoryDescription">Description</label>
+                            <textarea id="categoryDescription" class="form-input" rows="4"></textarea>
                         </div>
-                        <div class="form-group">
-                            <button type="submit" class="btn btn-primary">Save Category</button>
-                            <button type="button" class="btn btn-secondary" onclick="closeModal('addCategoryModal')">Cancel</button>
-                        </div>
+                        <button type="submit" class="btn btn-primary">Add Category</button>
                     </form>
                 </div>
             </div>
 
+            <!-- Edit Category Modal -->
+            <div class="modal" id="editCategoryModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title">Edit Category</h3>
+                        <button class="modal-close" onclick="closeModal('editCategoryModal')">×</button>
+                    </div>
+                    <form id="editCategoryForm" onsubmit="event.preventDefault(); updateCategory();">
+                        <input type="hidden" id="editCategoryId">
+                        <div class="form-group">
+                            <label class="form-label" for="editCategoryName">Category Name</label>
+                            <input type="text" id="editCategoryName" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editCategoryDescription">Description</label>
+                            <textarea id="editCategoryDescription" class="form-input" rows="4"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Category</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Add User Modal -->
             <div class="modal" id="addUserModal">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3 class="modal-title">Add User</h3>
-                        <button class="modal-close" onclick="closeModal('addUserModal')">&times;</button>
+                        <button class="modal-close" onclick="closeModal('addUserModal')">×</button>
                     </div>
-                    <form id="userForm" class="form-grid">
-                        <input type="hidden" id="userId">
+                    <form id="addUserForm" onsubmit="event.preventDefault(); addUser();">
                         <div class="form-group">
-                            <label class="form-label">Email</label>
-                            <input type="email" class="form-input" id="userEmail" required>
+                            <label class="form-label" for="userEmail">Email</label>
+                            <input type="email" id="userEmail" class="form-input" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Full Name</label>
-                            <input type="text" class="form-input" id="userFullName" required>
+                            <label class="form-label" for="userFullName">Full Name</label>
+                            <input type="text" id="userFullName" class="form-input" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Phone</label>
-                            <input type="text" class="form-input" id="userPhone" required>
+                            <label class="form-label" for="userPhone">Phone</label>
+                            <input type="text" id="userPhone" class="form-input" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Password</label>
-                            <input type="password" class="form-input" id="userPassword" placeholder="Required for new users">
+                            <label class="form-label" for="userPassword">Password</label>
+                            <input type="password" id="userPassword" class="form-input" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Role</label>
-                            <select class="form-input" id="userRole">
-                                <option value="0">Customer</option>
-                                <option value="1">Admin</option>
-                            </select>
+                            <label class="form-label" for="userIsAdmin">Admin</label>
+                            <input type="checkbox" id="userIsAdmin">
                         </div>
-                        <div class="form-group">
-                            <button type="submit" class="btn btn-primary">Save User</button>
-                            <button type="button" class="btn btn-secondary" onclick="closeModal('addUserModal')">Cancel</button>
-                        </div>
+                        <button type="submit" class="btn btn-primary">Add User</button>
                     </form>
                 </div>
             </div>
 
-                    <div class="modal" id="quickAddModal">
+            <!-- Edit User Modal -->
+            <div class="modal" id="editUserModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title">Edit User</h3>
+                        <button class="modal-close" onclick="closeModal('editUserModal')">×</button>
+                    </div>
+                    <form id="editUserForm" onsubmit="event.preventDefault(); updateUser();">
+                        <input type="hidden" id="editUserId">
+                        <div class="form-group">
+                            <label class="form-label" for="editUserEmail">Email</label>
+                            <input type="email" id="editUserEmail" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editUserFullName">Full Name</label>
+                            <input type="text" id="editUserFullName" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editUserPhone">Phone</label>
+                            <input type="text" id="editUserPhone" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editUserIsAdmin">Admin</label>
+                            <input type="checkbox" id="editUserIsAdmin">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update User</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- View Order Modal -->
+            <div class="modal" id="viewOrderModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title">Order Details</h3>
+                        <button class="modal-close" onclick="closeModal('viewOrderModal')">×</button>
+                    </div>
+                    <div id="orderDetails">
+                        <h4>Order Information</h4>
+                        <p><strong>Order ID:</strong> <span id="orderId"></span></p>
+                        <p><strong>Customer:</strong> <span id="orderCustomer"></span></p>
+                        <p><strong>Email:</strong> <span id="orderEmail"></span></p>
+                        <p><strong>Phone:</strong> <span id="orderPhone"></span></p>
+                        <p><strong>Address:</strong> <span id="orderAddress"></span></p>
+                        <p><strong>Total:</strong> <span id="orderTotal"></span></p>
+                        <p><strong>Delivery Fee:</strong> <span id="orderDeliveryFee"></span></p>
+                        <p><strong>Status:</strong> <span id="orderStatus"></span></p>
+                        <p><strong>Date:</strong> <span id="orderDate"></span></p>
+                        <h4>Order Items</h4>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>SKU</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orderItemsTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ship Order Modal -->
+            <div class="modal" id="shipOrderModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title">Ship Order</h3>
+                        <button class="modal-close" onclick="closeModal('shipOrderModal')">×</button>
+                    </div>
+                    <form id="shipOrderForm" onsubmit="event.preventDefault(); submitShipOrder();">
+                        <input type="hidden" id="shipOrderId">
+                        <div class="form-group">
+                            <label class="form-label" for="estimatedDeliveryDays">Estimated Delivery Days</label>
+                            <input type="number" id="estimatedDeliveryDays" class="form-input" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <p><strong>Preview Notification:</strong> <span id="deliveryPreview">Order Received and Ready to Ship. Package will be delivered in <span id="deliveryDaysPreview">0</span> days.</span></p>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="shipOrderSubmit">Ship Order</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Add Modal -->
+            <div class="modal" id="quickAddModal">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3 class="modal-title">Quick Add</h3>
                         <button class="modal-close" onclick="closeModal('quickAddModal')">×</button>
                     </div>
-                    <form id="quickAddForm" class="form-grid">
-                        <div class="form-group">
-                            <label class="form-label">Type</label>
-                            <select class="form-input" id="quickAddType" onchange="toggleQuickAddFields()">
-                                <option value="product">Product</option>
-                                <option value="category">Category</option>
-                            </select>
-                        </div>
-                        <!-- Product Fields -->
-                        <div id="quickAddProductFields">
-                            <div class="form-group">
-                                <label class="form-label">Product Name</label>
-                                <input type="text" class="form-input" id="quickProductName" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Price ($)</label>
-                                <input type="number" class="form-input" id="quickProductPrice" step="0.01" min="0" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Stock Quantity</label>
-                                <input type="number" class="form-input" id="quickProductStock" min="0" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Category</label>
-                                <select class="form-input" id="quickProductCategory" required>
-                                    <option value="">Select Category</option>
-                                    <?php foreach ($categories as $category): ?>
-                                        <option value="<?php echo htmlspecialchars($category['id']); ?>"><?php echo htmlspecialchars($category['name']); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </div>
-                        <!-- Category Fields -->
-                        <div id="quickAddCategoryFields" style="display: none;">
-                            <div class="form-group">
-                                <label class="form-label">Category Name</label>
-                                <input type="text" class="form-input" id="quickCategoryName" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Description</label>
-                                <textarea class="form-input" id="quickCategoryDescription" rows="4"></textarea>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <button type="submit" class="btn btn-primary">Add</button>
-                            <button type="button" class="btn btn-secondary" onclick="closeModal('quickAddModal')">Cancel</button>
-                        </div>
-                    </form>
+                    <div class="form-group">
+                        <button class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;" onclick="openModal('addProductModal'); closeModal('quickAddModal');">Add Product</button>
+                        <button class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;" onclick="openModal('addCategoryModal'); closeModal('quickAddModal');">Add Category</button>
+                        <button class="btn btn-primary" style="width: 100%;" onclick="openModal('addUserModal'); closeModal('quickAddModal');">Add User</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1850,18 +2323,25 @@ while ($row = $result->fetch_assoc()) {
     <script>
         // ----- Theme Toggle -----
         function toggleTheme() {
-            const isDark = document.body.dataset.theme === 'dark';
-            document.body.dataset.theme = isDark ? 'light' : 'dark';
-            document.getElementById('themeIcon').className = isDark ? 'fas fa-moon' : 'fas fa-sun';
-            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            const body = document.body;
+            const themeIcon = document.getElementById('themeIcon');
+            if (body.dataset.theme === 'dark') {
+                body.dataset.theme = 'light';
+                themeIcon.className = 'fas fa-moon';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.dataset.theme = 'dark';
+                themeIcon.className = 'fas fa-sun';
+                localStorage.setItem('theme', 'dark');
+            }
         }
 
-        // Initialize theme
-        (function initializeTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            document.body.dataset.theme = savedTheme;
-            document.getElementById('themeIcon').className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-        })();
+        // Apply saved theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.body.dataset.theme = savedTheme;
+        if (savedTheme === 'dark') {
+            document.getElementById('themeIcon').className = 'fas fa-sun';
+        }
 
         // ----- Tab Switching -----
         function switchTab(tabId) {
@@ -1870,13 +2350,10 @@ while ($row = $result->fetch_assoc()) {
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
             document.querySelector(`.nav-link[data-tab="${tabId}"]`).classList.add('active');
             document.getElementById('pageTitle').textContent = tabId.charAt(0).toUpperCase() + tabId.slice(1);
-            if (tabId === 'products') fetchProducts();
-            if (tabId === 'orders') fetchOrders('all');
-            if (tabId === 'categories') fetchCategories();
-            if (tabId === 'users') fetchUsers();
-            if (tabId === 'reviews') fetchReviews();
+            if (tabId === 'orders') fetchOrders();
         }
 
+        // Initialize default tab
         document.querySelectorAll('.nav-link').forEach(link => {
             link.addEventListener('click', () => switchTab(link.dataset.tab));
         });
@@ -1884,189 +2361,104 @@ while ($row = $result->fetch_assoc()) {
         // ----- Modal Handling -----
         function openModal(modalId) {
             document.getElementById(modalId).classList.add('active');
+            if (modalId === 'shipOrderModal') {
+                document.getElementById('shipOrderForm').reset();
+                document.getElementById('deliveryDaysPreview').textContent = '0';
+                document.getElementById('estimatedDeliveryDays').focus();
+            }
         }
 
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
-            if (modalId === 'addProductModal') document.getElementById('productForm').reset();
-            if (modalId === 'addCategoryModal') document.getElementById('categoryForm').reset();
-            if (modalId === 'addUserModal') document.getElementById('userForm').reset();
-            if (modalId === 'quickAddModal') document.getElementById('quickAddForm').reset();
-            document.getElementById('imagePreview').style.display = 'none';
         }
 
-        // ----- Alert Dismiss -----
+        // ----- Alert Handling -----
+        function showAlert(message, type = 'success') {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message} <span class="alert-dismiss" onclick="dismissAlert(this)">×</span>`;
+            document.querySelector('.main-content').insertBefore(alert, document.querySelector('.main-content').firstChild);
+            setTimeout(() => alert.remove(), 5000);
+        }
+
         function dismissAlert(element) {
             element.parentElement.remove();
         }
 
-        // ----- Image Preview -----
-        document.getElementById('productImage')?.addEventListener('change', function(e) {
-            const preview = document.getElementById('imagePreview');
-            if (e.target.files[0]) {
-                preview.src = URL.createObjectURL(e.target.files[0]);
-                preview.style.display = 'block';
-            } else {
-                preview.style.display = 'none';
+        // ----- AJAX Helper -----
+        async function sendAjaxRequest(url, data, method = 'POST') {
+            const formData = new FormData();
+            for (const key in data) {
+                formData.append(key, data[key]);
+            }
+            const response = await fetch(url, {
+                method,
+                body: method === 'POST' ? formData : undefined,
+            });
+            return response.json();
+        }
+
+        // ----- Hero Section Functions -----
+        function updateHeroSection() {
+            const formData = new FormData();
+            formData.append('action', 'update_hero_section');
+            formData.append('title', document.getElementById('heroTitle').value);
+            formData.append('description', document.getElementById('heroDescription').value);
+            formData.append('button_text', document.getElementById('heroButtonText').value);
+            formData.append('existing_main_image', document.getElementById('existingMainImage').value);
+            formData.append('existing_sparkle_1', document.getElementById('existingSparkle1').value);
+            formData.append('existing_sparkle_2', document.getElementById('existingSparkle2').value);
+            if (document.getElementById('heroMainImage').files[0]) {
+                formData.append('main_image', document.getElementById('heroMainImage').files[0]);
+            }
+            if (document.getElementById('heroSparkleImage1').files[0]) {
+                formData.append('sparkle_image_1', document.getElementById('heroSparkleImage1').files[0]);
+            }
+            if (document.getElementById('heroSparkleImage2').files[0]) {
+                formData.append('sparkle_image_2', document.getElementById('heroSparkleImage2').files[0]);
+            }
+
+            sendAjaxRequest('', formData).then(response => {
+                showAlert(response.message, response.success ? 'success' : 'error');
+                if (response.success) {
+                    location.reload();
+                }
+            });
+        }
+
+        // Real-time Hero Preview
+        document.getElementById('heroTitle').addEventListener('input', function () {
+            document.getElementById('heroTitlePreview').textContent = this.value || 'Your Title';
+        });
+        document.getElementById('heroDescription').addEventListener('input', function () {
+            document.getElementById('heroDescriptionPreview').textContent = this.value || 'Your Description';
+        });
+        document.getElementById('heroButtonText').addEventListener('input', function () {
+            document.getElementById('heroButtonPreview').textContent = this.value || 'Shop Now';
+        });
+        document.getElementById('heroMainImage').addEventListener('change', function () {
+            const file = this.files[0];
+            if (file) {
+                document.getElementById('heroMainImagePreview').src = URL.createObjectURL(file);
+            }
+        });
+        document.getElementById('heroSparkleImage1').addEventListener('change', function () {
+            const file = this.files[0];
+            if (file) {
+                document.getElementById('heroSparkle1Preview').src = URL.createObjectURL(file);
+            }
+        });
+        document.getElementById('heroSparkleImage2').addEventListener('change', function () {
+            const file = this.files[0];
+            if (file) {
+                document.getElementById('heroSparkle2Preview').src = URL.createObjectURL(file);
             }
         });
 
-        // ----- Quick Add Toggle Fields -----
-        function toggleQuickAddFields() {
-            const type = document.getElementById('quickAddType').value;
-            document.getElementById('quickAddProductFields').style.display = type === 'product' ? 'block' : 'none';
-            document.getElementById('quickAddCategoryFields').style.display = type === 'category' ? 'block' : 'none';
-        }
-
-        function openQuickAdd() {
-            openModal('quickAddModal');
-            toggleQuickAddFields();
-        }
-
-        // ----- Fetch Functions -----
-        async function fetchProducts(search = '') {
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=search_products&search=${encodeURIComponent(search)}`
-                });
-                const products = await response.json();
-                const tbody = document.getElementById('productsTable');
-                tbody.innerHTML = products.map(product => `
-                    <tr>
-                        <td>${product.id}</td>
-                        <td>${product.name}</td>
-                        <td>${product.sku}</td>
-                        <td>$${parseFloat(product.price).toFixed(2)}</td>
-                        <td>${product.category || 'N/A'}</td>
-                        <td>${product.stock_quantity}</td>
-                        <td>
-                            <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick='editProduct(${JSON.stringify(product)})'>Edit</button>
-                            <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteProduct(${product.id})">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                showAlert('error', 'Failed to fetch products.');
-            }
-        }
-
-        async function fetchOrders(status) {
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=fetch_orders&status=${encodeURIComponent(status)}`
-                });
-                const orders = await response.json();
-                const tbody = document.getElementById('ordersTable');
-                tbody.innerHTML = orders.map(order => `
-                    <tr>
-                        <td>#${order.id}</td>
-                        <td>${order.full_name}</td>
-                        <td>$${parseFloat(order.total).toFixed(2)}</td>
-                        <td>$${parseFloat(order.delivery_fee).toFixed(2)}</td>
-                        <td><span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span></td>
-                        <td>${new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                        <td>
-                            <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="viewOrder(${order.id})">View</button>
-                            ${order.status === 'processing' ? `<button class="btn btn-success" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="shipOrder(${order.id})">Ship</button>` : ''}
-                        </td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                showAlert('error', 'Failed to fetch orders.');
-            }
-        }
-
-        async function fetchCategories() {
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'action=fetch_categories'
-                });
-                const categories = await response.json();
-                const tbody = document.getElementById('categoriesTable');
-                tbody.innerHTML = categories.map(category => `
-                    <tr>
-                        <td>${category.id}</td>
-                        <td>${category.name}</td>
-                        <td>${category.description || 'N/A'}</td>
-                        <td>${new Date(category.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                        <td>
-                            <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editCategory(${category.id}, '${category.name}', '${category.description || ''}')">Edit</button>
-                            <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteCategory(${category.id})">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                showAlert('error', 'Failed to fetch categories.');
-            }
-        }
-
-        async function fetchUsers() {
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'action=fetch_users'
-                });
-                const users = await response.json();
-                const tbody = document.getElementById('usersTable');
-                tbody.innerHTML = users.map(user => `
-                    <tr>
-                        <td>${user.id}</td>
-                        <td>${user.email}</td>
-                        <td>${user.full_name}</td>
-                        <td>${user.phone}</td>
-                        <td>${user.is_admin ? 'Admin' : 'Customer'}</td>
-                        <td>${new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                        <td>
-                            <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick='editUser(${JSON.stringify(user)})'>Edit</button>
-                            <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteUser(${user.id})">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                showAlert('error', 'Failed to fetch users.');
-            }
-        }
-
-        async function fetchReviews() {
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'action=fetch_reviews'
-                });
-                const reviews = await response.json();
-                const tbody = document.getElementById('reviewsTable');
-                tbody.innerHTML = reviews.map(review => `
-                    <tr>
-                        <td>${review.product_name}</td>
-                        <td>${review.full_name}</td>
-                        <td>${review.rating}/5</td>
-                        <td>${review.review_text.substring(0, 50)}${review.review_text.length > 50 ? '...' : ''}</td>
-                        <td>${new Date(review.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                        <td>
-                            <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteReview(${review.id})">Delete</button>
-                        </td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                showAlert('error', 'Failed to fetch reviews.');
-            }
-        }
-
-        // ----- CRUD Operations -----
-        document.getElementById('productForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+        // ----- Product Functions -----
+        function addProduct() {
             const formData = new FormData();
-            const productId = document.getElementById('productId').value;
-            formData.append('action', productId ? 'edit_product' : 'add_product');
-            if (productId) formData.append('product_id', productId);
+            formData.append('action', 'add_product');
             formData.append('name', document.getElementById('productName').value);
             formData.append('price', document.getElementById('productPrice').value);
             formData.append('stock_quantity', document.getElementById('productStock').value);
@@ -2074,290 +2466,328 @@ while ($row = $result->fetch_assoc()) {
             formData.append('misc_attribute', document.getElementById('productMiscAttribute').value);
             formData.append('featured', document.getElementById('productFeatured').checked ? 1 : 0);
             formData.append('description', document.getElementById('productDescription').value);
-            if (productId) formData.append('existing_image', document.getElementById('existingImage').value);
-            const imageFile = document.getElementById('productImage').files[0];
-            if (imageFile) formData.append('image', imageFile);
-
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) {
-                    closeModal('addProductModal');
-                    fetchProducts();
-                }
-            } catch (error) {
-                showAlert('error', 'Failed to save product.');
+            if (document.getElementById('productImage').files[0]) {
+                formData.append('image', document.getElementById('productImage').files[0]);
             }
+
+            sendAjaxRequest('', formData).then(response => {
+                showAlert(response.message, response.success ? 'success' : 'error');
+                if (response.success) {
+                    closeModal('addProductModal');
+                    location.reload();
+                }
+            });
+        }
+
+        function editProduct(id) {
+            sendAjaxRequest('', { action: 'search_products', search: `id:${id}` }).then(products => {
+                if (products.length > 0) {
+                    const product = products[0];
+                    document.getElementById('editProductId').value = product.id;
+                    document.getElementById('editProductName').value = product.name;
+                    document.getElementById('editProductPrice').value = product.price;
+                    document.getElementById('editProductStock').value = product.stock_quantity;
+                    document.getElementById('editProductCategory').value = product.category_id || '';
+                    document.getElementById('editProductMiscAttribute').value = product.misc_attribute || '';
+                    document.getElementById('editProductFeatured').checked = product.featured == 1;
+                    document.getElementById('editProductDescription').value = product.description || '';
+                    document.getElementById('existingProductImage').value = product.image || '';
+                    openModal('editProductModal');
+                } else {
+                    showAlert('Product not found.', 'error');
+                }
+            });
+        }
+
+        function updateProduct() {
+            const formData = new FormData();
+            formData.append('action', 'edit_product');
+            formData.append('product_id', document.getElementById('editProductId').value);
+            formData.append('name', document.getElementById('editProductName').value);
+            formData.append('price', document.getElementById('editProductPrice').value);
+            formData.append('stock_quantity', document.getElementById('editProductStock').value);
+            formData.append('category_id', document.getElementById('editProductCategory').value);
+            formData.append('misc_attribute', document.getElementById('editProductMiscAttribute').value);
+            formData.append('featured', document.getElementById('editProductFeatured').checked ? 1 : 0);
+            formData.append('description', document.getElementById('editProductDescription').value);
+            formData.append('existing_image', document.getElementById('existingProductImage').value);
+            if (document.getElementById('editProductImage').files[0]) {
+                formData.append('image', document.getElementById('editProductImage').files[0]);
+            }
+
+            sendAjaxRequest('', formData).then(response => {
+                showAlert(response.message, response.success ? 'success' : 'error');
+                if (response.success) {
+                    closeModal('editProductModal');
+                    location.reload();
+                }
+            });
+        }
+
+        function deleteProduct(id) {
+            if (confirm('Are you sure you want to delete this product?')) {
+                sendAjaxRequest('', { action: 'delete_product', product_id: id }).then(response => {
+                    showAlert(response.message, response.success ? 'success' : 'error');
+                    if (response.success) {
+                        location.reload();
+                    }
+                });
+            }
+        }
+
+        // ----- Order Functions -----
+        function fetchOrders() {
+            const status = document.getElementById('orderStatusFilter').value;
+            sendAjaxRequest('', { action: 'fetch_orders', status }).then(orders => {
+                const tbody = document.getElementById('ordersTable');
+                tbody.innerHTML = '';
+                orders.forEach(order => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>#${order.id}</td>
+                        <td>${order.full_name}</td>
+                        <td>$${parseFloat(order.total).toFixed(2)}</td>
+                        <td><span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span></td>
+                        <td>${new Date(order.created_at).toLocaleDateString()}</td>
+                        <td>
+                            <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="viewOrder(${order.id})">View</button>
+                            ${order.status === 'processing' ? `<button class="btn btn-success" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="shipOrder(${order.id})">Ship</button>` : ''}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            });
+        }
+
+        function viewOrder(id) {
+            sendAjaxRequest('', { action: 'fetch_order_details', order_id: id }).then(order => {
+                if (order.info) {
+                    document.getElementById('orderId').textContent = `#${order.info.id}`;
+                    document.getElementById('orderCustomer').textContent = order.info.full_name;
+                    document.getElementById('orderEmail').textContent = order.info.email;
+                    document.getElementById('orderPhone').textContent = order.info.phone;
+                    document.getElementById('orderAddress').textContent = order.info.address;
+                    document.getElementById('orderTotal').textContent = `$${parseFloat(order.info.total).toFixed(2)}`;
+                    document.getElementById('orderDeliveryFee').textContent = `$${parseFloat(order.info.delivery_fee).toFixed(2)}`;
+                    document.getElementById('orderStatus').textContent = order.info.status;
+                    document.getElementById('orderDate').textContent = new Date(order.info.created_at).toLocaleDateString();
+                    const itemsTable = document.getElementById('orderItemsTable');
+                    itemsTable.innerHTML = '';
+                    order.items.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.name}</td>
+                            <td>${item.sku}</td>
+                            <td>${item.quantity}</td>
+                            <td>$${parseFloat(item.price).toFixed(2)}</td>
+                        `;
+                        itemsTable.appendChild(row);
+                    });
+                    openModal('viewOrderModal');
+                } else {
+                    showAlert('Order not found.', 'error');
+                }
+            });
+        }
+
+        function shipOrder(orderId) {
+            document.getElementById('shipOrderId').value = orderId;
+            document.getElementById('shipOrderForm').reset();
+            document.getElementById('estimatedDeliveryDays').value = '';
+            document.getElementById('deliveryDaysPreview').textContent = '0';
+            openModal('shipOrderModal');
+        }
+
+        function submitShipOrder() {
+            const orderId = document.getElementById('shipOrderId').value;
+            const estimatedDeliveryDays = document.getElementById('estimatedDeliveryDays').value;
+            const submitButton = document.getElementById('shipOrderSubmit');
+
+            if (estimatedDeliveryDays <= 0) {
+                showAlert('Estimated delivery days must be a positive number.', 'error');
+                return;
+            }
+
+            submitButton.classList.add('btn-loading');
+            submitButton.disabled = true;
+
+            sendAjaxRequest('', {
+                action: 'ship_order',
+                order_id: orderId,
+                estimated_delivery_days: estimatedDeliveryDays
+            }).then(response => {
+                submitButton.classList.remove('btn-loading');
+                submitButton.disabled = false;
+                showAlert(response.message, response.success ? 'success' : 'error');
+                if (response.success) {
+                    closeModal('shipOrderModal');
+                    fetchOrders();
+                }
+            }).catch(error => {
+                submitButton.classList.remove('btn-loading');
+                submitButton.disabled = false;
+                showAlert('An error occurred while processing the request.', 'error');
+                console.error(error);
+            });
+        }
+
+        // Real-time delivery days preview
+        document.getElementById('estimatedDeliveryDays').addEventListener('input', function () {
+            const days = parseInt(this.value) || 0;
+            document.getElementById('deliveryDaysPreview').textContent = days;
         });
 
-        function editProduct(product) {
-            document.getElementById('productId').value = product.id;
-            document.getElementById('productName').value = product.name;
-            document.getElementById('productPrice').value = product.price;
-            document.getElementById('productStock').value = product.stock_quantity;
-            document.getElementById('productCategory').value = product.category_id || '';
-            document.getElementById('productMiscAttribute').value = product.misc_attribute || '';
-            document.getElementById('productFeatured').checked = product.featured == 1;
-            document.getElementById('productDescription').value = product.description || '';
-            document.getElementById('existingImage').value = product.image;
-            const preview = document.getElementById('imagePreview');
-            preview.src = product.image;
-            preview.style.display = 'block';
-            document.querySelector('#addProductModal .modal-title').textContent = 'Edit Product';
-            openModal('addProductModal');
-        }
-
-        async function deleteProduct(productId) {
-            if (!confirm('Are you sure you want to delete this product?')) return;
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=delete_product&product_id=${productId}`
-                });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) fetchProducts();
-            } catch (error) {
-                showAlert('error', 'Failed to delete product.');
-            }
-        }
-
-        document.getElementById('categoryForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const categoryId = document.getElementById('categoryId').value;
-            const data = new URLSearchParams({
-                action: categoryId ? 'edit_category' : 'add_category',
+        // ----- Category Functions -----
+        function addCategory() {
+            sendAjaxRequest('', {
+                action: 'add_category',
                 name: document.getElementById('categoryName').value,
                 description: document.getElementById('categoryDescription').value
-            });
-            if (categoryId) data.append('category_id', categoryId);
-
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: data
-                });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) {
+            }).then(response => {
+                showAlert(response.message, response.success ? 'success' : 'error');
+                if (response.success) {
                     closeModal('addCategoryModal');
-                    fetchCategories();
+                    location.reload();
                 }
-            } catch (error) {
-                showAlert('error', 'Failed to save category.');
-            }
-        });
-
-        function editCategory(id, name, description) {
-            document.getElementById('categoryId').value = id;
-            document.getElementById('categoryName').value = name;
-            document.getElementById('categoryDescription').value = description;
-            document.querySelector('#addCategoryModal .modal-title').textContent = 'Edit Category';
-            openModal('addCategoryModal');
+            });
         }
 
-        async function deleteCategory(categoryId) {
-            if (!confirm('Are you sure you want to delete this category?')) return;
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=delete_category&category_id=${categoryId}`
+        function editCategory(id) {
+            sendAjaxRequest('', { action: 'fetch_categories' }).then(categories => {
+                const category = categories.find(c => c.id == id);
+                if (category) {
+                    document.getElementById('editCategoryId').value = category.id;
+                    document.getElementById('editCategoryName').value = category.name;
+                    document.getElementById('editCategoryDescription').value = category.description || '';
+                    openModal('editCategoryModal');
+                } else {
+                    showAlert('Category not found.', 'error');
+                }
+            });
+        }
+
+        function updateCategory() {
+            sendAjaxRequest('', {
+                action: 'edit_category',
+                category_id: document.getElementById('editCategoryId').value,
+                name: document.getElementById('editCategoryName').value,
+                description: document.getElementById('editCategoryDescription').value
+            }).then(response => {
+                showAlert(response.message, response.success ? 'success' : 'error');
+                if (response.success) {
+                    closeModal('editCategoryModal');
+                    location.reload();
+                }
+            });
+        }
+
+        function deleteCategory(id) {
+            if (confirm('Are you sure you want to delete this category?')) {
+                sendAjaxRequest('', { action: 'delete_category', category_id: id }).then(response => {
+                    showAlert(response.message, response.success ? 'success' : 'error');
+                    if (response.success) {
+                        location.reload();
+                    }
                 });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) fetchCategories();
-            } catch (error) {
-                showAlert('error', 'Failed to delete category.');
             }
         }
 
-        document.getElementById('userForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const userId = document.getElementById('userId').value;
-            const data = new URLSearchParams({
-                action: userId ? 'edit_user' : 'add_user',
+        // ----- User Functions -----
+        function addUser() {
+            sendAjaxRequest('', {
+                action: 'add_user',
                 email: document.getElementById('userEmail').value,
                 full_name: document.getElementById('userFullName').value,
                 phone: document.getElementById('userPhone').value,
-                is_admin: document.getElementById('userRole').value
-            });
-            if (userId) data.append('user_id', userId);
-            if (!userId) data.append('password', document.getElementById('userPassword').value);
-
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: data
-                });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) {
+                password: document.getElementById('userPassword').value,
+                is_admin: document.getElementById('userIsAdmin').checked ? 1 : 0
+            }).then(response => {
+                showAlert(response.message, response.success ? 'success' : 'error');
+                if (response.success) {
                     closeModal('addUserModal');
-                    fetchUsers();
+                    location.reload();
                 }
-            } catch (error) {
-                showAlert('error', 'Failed to save user.');
-            }
-        });
-
-        function editUser(user) {
-            document.getElementById('userId').value = user.id;
-            document.getElementById('userEmail').value = user.email;
-            document.getElementById('userFullName').value = user.full_name;
-            document.getElementById('userPhone').value = user.phone;
-            document.getElementById('userRole').value = user.is_admin;
-            document.getElementById('userPassword').value = '';
-            document.getElementById('userPassword').placeholder = 'Leave blank to keep current password';
-            document.querySelector('#addUserModal .modal-title').textContent = 'Edit User';
-            openModal('addUserModal');
+            });
         }
 
-        async function deleteUser(userId) {
-            if (!confirm('Are you sure you want to delete this user?')) return;
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=delete_user&user_id=${userId}`
+        function editUser(id) {
+            sendAjaxRequest('', { action: 'fetch_users' }).then(users => {
+                const user = users.find(u => u.id == id);
+                if (user) {
+                    document.getElementById('editUserId').value = user.id;
+                    document.getElementById('editUserEmail').value = user.email;
+                    document.getElementById('editUserFullName').value = user.full_name;
+                    document.getElementById('editUserPhone').value = user.phone;
+                    document.getElementById('editUserIsAdmin').checked = user.is_admin == 1;
+                    openModal('editUserModal');
+                } else {
+                    showAlert('User not found.', 'error');
+                }
+            });
+        }
+
+        function updateUser() {
+            sendAjaxRequest('', {
+                action: 'edit_user',
+                user_id: document.getElementById('editUserId').value,
+                email: document.getElementById('editUserEmail').value,
+                full_name: document.getElementById('editUserFullName').value,
+                phone: document.getElementById('editUserPhone').value,
+                is_admin: document.getElementById('editUserIsAdmin').checked ? 1 : 0
+            }).then(response => {
+                showAlert(response.message, response.success ? 'success' : 'error');
+                if (response.success) {
+                    closeModal('editUserModal');
+                    location.reload();
+                }
+            });
+        }
+
+        function deleteUser(id) {
+            if (confirm('Are you sure you want to delete this user?')) {
+                sendAjaxRequest('', { action: 'delete_user', user_id: id }).then(response => {
+                    showAlert(response.message, response.success ? 'success' : 'error');
+                    if (response.success) {
+                        location.reload();
+                    }
                 });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) fetchUsers();
-            } catch (error) {
-                showAlert('error', 'Failed to delete user.');
             }
         }
 
-        async function shipOrder(orderId) {
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=ship_order&order_id=${orderId}`
+        // ----- Review Functions -----
+        function deleteReview(id) {
+            if (confirm('Are you sure you want to delete this review?')) {
+                sendAjaxRequest('', { action: 'delete_review', review_id: id }).then(response => {
+                    showAlert(response.message, response.success ? 'success' : 'error');
+                    if (response.success) {
+                        location.reload();
+                    }
                 });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) fetchOrders('all');
-            } catch (error) {
-                showAlert('error', 'Failed to ship order.');
             }
         }
 
-        async function deleteReview(reviewId) {
-            if (!confirm('Are you sure you want to delete this review?')) return;
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=delete_review&review_id=${reviewId}`
-                });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) fetchReviews();
-            } catch (error) {
-                showAlert('error', 'Failed to delete review.');
-            }
-        }
-
-        function viewOrder(orderId) {
-            alert(`View order details for Order ID: ${orderId} (Implement detailed view as needed)`);
-        }
-
-        document.getElementById('passwordForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const data = new URLSearchParams({
+        // ----- Password Change -----
+        function changePassword() {
+            sendAjaxRequest('', {
                 action: 'change_password',
                 current_password: document.getElementById('currentPassword').value,
                 new_password: document.getElementById('newPassword').value,
                 confirm_password: document.getElementById('confirmPassword').value
-            });
-
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: data
-                });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) document.getElementById('passwordForm').reset();
-            } catch (error) {
-                showAlert('error', 'Failed to change password.');
-            }
-        });
-
-        document.getElementById('quickAddForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const type = document.getElementById('quickAddType').value;
-            let data;
-
-            if (type === 'product') {
-                data = new FormData();
-                data.append('action', 'add_product');
-                data.append('name', document.getElementById('quickProductName').value);
-                data.append('price', document.getElementById('quickProductPrice').value);
-                data.append('stock_quantity', document.getElementById('quickProductStock').value);
-                data.append('category_id', document.getElementById('quickProductCategory').value);
-            } else {
-                data = new URLSearchParams({
-                    action: 'add_category',
-                    name: document.getElementById('quickCategoryName').value,
-                    description: document.getElementById('quickCategoryDescription').value
-                });
-            }
-
-            try {
-                const response = await fetch('admin.php', {
-                    method: 'POST',
-                    body: data
-                });
-                const result = await response.json();
-                showAlert(result.success ? 'success' : 'error', result.message);
-                if (result.success) {
-                    closeModal('quickAddModal');
-                    if (type === 'product') fetchProducts();
-                    else fetchCategories();
+            }).then(response => {
+                showAlert(response.message, response.success ? 'success' : 'error');
+                if (response.success) {
+                    document.getElementById('changePasswordForm').reset();
                 }
-            } catch (error) {
-                showAlert('error', `Failed to add ${type}.`);
-            }
-        });
-
-        // ----- Utility Functions -----
-        function showAlert(type, message) {
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.innerHTML = `
-                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
-                ${message}
-                <span class="alert-dismiss" onclick="dismissAlert(this)">×</span>
-            `;
-            document.querySelector('.main-content').insertBefore(alert, document.querySelector('.top-bar').nextSibling);
-            setTimeout(() => alert.remove(), 5000);
+            });
         }
 
-        function filterOrders(status) {
-            fetchOrders(status);
-        }
-
-        function refreshInventory() {
-            window.location.reload(); // Simplified refresh
-        }
-
-        function refreshReviews() {
-            fetchReviews();
+        // ----- Quick Add -----
+        function openQuickAdd() {
+            openModal('quickAddModal');
         }
 
         // Initialize
-        fetchProducts();
+        fetchOrders();
     </script>
 </body>
 </html>

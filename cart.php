@@ -10,14 +10,52 @@ error_reporting(E_ALL);
 // Get current user
 $user = getCurrentUser();
 
-// ----- CART HANDLING -----
-if (isset($_POST['add_to_cart']) && $user) {
+// ----- CART ITEM ADDITION -----
+if (isset($_POST['action']) && $_POST['action'] === 'add_to_cart') {
+    if (!$user) {
+        header('Location: login.php');
+        exit;
+    }
+    
+    $user_id = $user['id']; 
     $product_id = (int)$_POST['product_id'];
-    $stmt = $conn->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE quantity = quantity + 1");
-    $stmt->bind_param("ii", $user['id'], $product_id);
+    $quantity = (int)$_POST['quantity'];
+
+    // Check if item already exists in cart
+    $stmt = $conn->prepare("SELECT quantity FROM cart WHERE user_id = ? AND product_id = ?");
+    $stmt->bind_param("ii", $user_id, $product_id);
+    $stmt->execute();
+    $existing = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if ($existing) {
+        // Update existing item
+        $new_quantity = $existing['quantity'] + $quantity;
+        $stmt = $conn->prepare("UPDATE cart SET quantity = ? WHERE user_id = ? AND product_id = ?");
+        $stmt->bind_param("iii", $new_quantity, $user_id, $product_id);
+    } else {
+        // Insert new item
+        $stmt = $conn->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
+        $stmt->bind_param("iii", $user_id, $product_id, $quantity);
+    }
     $stmt->execute();
     $stmt->close();
-    header("Location: cart.php");
+
+    // Fetch product name for notification
+    $stmt = $conn->prepare("SELECT name FROM products WHERE id = ?");
+    $stmt->bind_param("i", $product_id);
+    $stmt->execute();
+    $product = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    // Create notification (if function exists)
+    if (function_exists('createNotification')) {
+        $message = "Added {$product['name']} (x$quantity) to your cart.";
+        createNotification($conn, $user_id, $message, 'cart_added', 0);
+    }
+    
+    // Redirect to prevent form resubmission
+    header('Location: cart.php');
     exit;
 }
 
@@ -25,6 +63,7 @@ if (isset($_POST['add_to_cart']) && $user) {
 if (isset($_POST['update_quantity']) && $user) {
     $product_id = (int)$_POST['product_id'];
     $quantity = (int)$_POST['quantity'];
+    
     if ($quantity < 1) {
         $stmt = $conn->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
         $stmt->bind_param("ii", $user['id'], $product_id);
@@ -34,6 +73,10 @@ if (isset($_POST['update_quantity']) && $user) {
     }
     $stmt->execute();
     $stmt->close();
+    
+    // Redirect to prevent form resubmission
+    header('Location: cart.php');
+    exit;
 }
 
 // ----- CART ITEM REMOVAL -----
@@ -43,10 +86,35 @@ if (isset($_POST['remove_from_cart']) && $user) {
     $stmt->bind_param("ii", $user['id'], $product_id);
     $stmt->execute();
     $stmt->close();
+    
+    // Redirect to prevent form resubmission
+    header('Location: cart.php');
+    exit;
 }
 
 // ----- CART COUNT -----
-$cart_count = getCartCount($conn, $user);
+$cart_count = 0;
+if (function_exists('getCartCount') && $user) {
+    $cart_count = getCartCount($conn, $user);
+} elseif ($user) {
+    // Fallback cart count calculation
+    $stmt = $conn->prepare("SELECT SUM(quantity) as total FROM cart WHERE user_id = ?");
+    $stmt->bind_param("i", $user['id']);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $cart_count = $result['total'] ?? 0;
+    $stmt->close();
+}
+
+// ----- FETCH DELIVERY FEE FROM DB -----
+$delivery_fee = 0;
+if ($user) {
+    $stmt = $conn->prepare("SELECT fee FROM delivery_fees WHERE is_active = 1 LIMIT 1");
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $delivery_fee = $result['fee'] ?? 0;
+    $stmt->close();
+}
 ?>
 
 <!DOCTYPE html>
@@ -60,14 +128,36 @@ $cart_count = getCartCount($conn, $user);
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="global.css">
     <link rel="stylesheet" href="responsive.css">
-    <link rel="stylesheet" href="carttt.css">
     <link rel="stylesheet" href="hamburger.css">
     <style>  
+        /* ===== GLOBAL RESET AND BASE STYLES ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f8fafc;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+            min-height: 100vh;
+            width: 100%;
+            max-width: 100vw; /* Prevent width overflow */
+        }
+
         /* ===== NAVIGATION WITH SCROLL HIDE ===== */
         .navbar {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
+            padding: 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -80,6 +170,8 @@ $cart_count = getCartCount($conn, $user);
             border-bottom: 1px solid rgba(255, 255, 255, 0.2);
             transform: translateY(0);
             transition: transform 0.3s ease-in-out, box-shadow 0.3s ease;
+            width: 100%;
+            max-width: 100vw;
         }
 
         .navbar.navbar-hidden {
@@ -91,13 +183,12 @@ $cart_count = getCartCount($conn, $user);
             box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
         }
 
-        /* Add body padding to account for fixed navbar */
         body {
             padding-top: 80px;
         }
 
         .logo {
-            font-size: 1.8rem;
+            font-size: clamp(1.2rem, 4vw, 1.8rem);
             font-weight: 600;
             color: #2A2AFF;
             text-decoration: none;
@@ -105,6 +196,7 @@ $cart_count = getCartCount($conn, $user);
             align-items: center;
             gap: 0.5rem;
             transition: all 0.3s ease;
+            flex-shrink: 0;
         }
 
         .logo:hover {
@@ -113,7 +205,7 @@ $cart_count = getCartCount($conn, $user);
         }
 
         .logo i {
-            font-size: 1.6rem;
+            font-size: clamp(1rem, 3vw, 1.6rem);
             background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -124,8 +216,9 @@ $cart_count = getCartCount($conn, $user);
             display: flex;
             flex: 1;
             max-width: 500px;
-            margin: 0 2rem;
+            margin: 0 1rem;
             position: relative;
+            min-width: 0; /* Allow shrinking */
         }
 
         .search-bar input {
@@ -138,6 +231,7 @@ $cart_count = getCartCount($conn, $user);
             outline: none;
             transition: all 0.3s ease;
             background: rgba(255, 255, 255, 0.9);
+            min-width: 0;
         }
 
         .search-bar input:focus {
@@ -157,6 +251,7 @@ $cart_count = getCartCount($conn, $user);
             z-index: 1;
             transition: all 0.3s ease;
             font-size: 14px;
+            flex-shrink: 0;
         }
 
         .search-bar button:hover {
@@ -168,7 +263,8 @@ $cart_count = getCartCount($conn, $user);
         .nav-right {
             display: flex;
             align-items: center;
-            gap: 1.5rem;
+            gap: 1rem;
+            flex-shrink: 0;
         }
 
         /* Cart Link */
@@ -179,10 +275,11 @@ $cart_count = getCartCount($conn, $user);
             text-decoration: none;
             color: #333;
             font-weight: 500;
-            padding: 8px 16px;
+            padding: 8px 12px;
             border-radius: 25px;
             transition: all 0.3s ease;
             position: relative;
+            white-space: nowrap;
         }
 
         .cart-link:hover {
@@ -204,24 +301,6 @@ $cart_count = getCartCount($conn, $user);
             margin-left: -5px;
         }
 
-        /* Admin Link */
-        .admin-link {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            text-decoration: none;
-            color: #333;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 25px;
-            transition: all 0.3s ease;
-        }
-
-        .admin-link:hover {
-            background: rgba(42, 42, 255, 0.1);
-            color: #2A2AFF;
-        }
-
         /* Profile Dropdown */
         .profile-dropdown {
             position: relative;
@@ -237,6 +316,7 @@ $cart_count = getCartCount($conn, $user);
             transition: all 0.3s ease;
             border: 1px solid #e0e0e0;
             background: white;
+            white-space: nowrap;
         }
 
         .profile-trigger:hover {
@@ -245,15 +325,16 @@ $cart_count = getCartCount($conn, $user);
         }
 
         .profile-avatar {
-            width: 40px;
-            height: 40px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 16px;
+            font-size: 14px;
+            flex-shrink: 0;
         }
 
         .profile-info {
@@ -338,220 +419,567 @@ $cart_count = getCartCount($conn, $user);
             margin: 8px 16px;
         }
 
-        .hamburger {
-            display: none;
+        /* ===== MAIN CONTENT ===== */
+        main {
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: hidden;
         }
 
-        /* ===== CART STYLES ===== */
-        .cart {
-            max-width: 800px;
+        /* Cart Container */
+        .cart-container {
+            max-width: 1200px;
             margin: 2rem auto;
-            padding: 1.5rem;
-            background: linear-gradient(135deg, #FFFFFF, #F6F6F6);
-            border-radius: 12px;
-            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.1);
-            border: 1px solid #f0f0f0;
-        }
-
-        .cart h2 {
-            font-family: 'Poppins', sans-serif;
-            font-weight: 600;
-            color: #2d3748;
-            margin-bottom: 1.5rem;
-            font-size: 1.8rem;
+            padding: 0 1rem;
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            border-bottom: 2px solid #f7fafc;
-            padding-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 2rem;
+            justify-content: flex-start;
+            width: 100%;
+            box-sizing: border-box;
         }
 
-        /* Cart Items */
+        /* Cart Items Section */
+        .cart-items {
+            flex: 2;
+            min-width: 300px;
+            width: 100%;
+        }
+
+        .cart-items h2 {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: clamp(1.5rem, 4vw, 2rem);
+            color: #000;
+            margin-bottom: 1.5rem;
+            text-transform: uppercase;
+        }
+
         .cart-item {
             display: flex;
             align-items: center;
-            gap: 1rem;
             padding: 1rem;
-            background: #f8fafc;
+            background: #fff;
             border-radius: 8px;
             margin-bottom: 1rem;
-            border: 1px solid #e2e8f0;
-            transition: all 0.3s ease;
-        }
-
-        .cart-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(42, 42, 255, 0.1);
-            border-color: #2A2AFF;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
         }
 
         .cart-item img {
             width: 80px;
             height: 80px;
             object-fit: cover;
-            border-radius: 8px;
-            border: 2px solid #e2e8f0;
+            border-radius: 4px;
+            margin-right: 1rem;
+            flex-shrink: 0;
         }
 
         .cart-item-details {
             flex: 1;
-            min-width: 0;
             display: flex;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
+            flex-direction: column;
+            gap: 0.5rem;
+            min-width: 0; /* Allow text to wrap */
         }
 
         .cart-item-details h3 {
-            color: #2d3748;
             font-family: 'Poppins', sans-serif;
             font-weight: 600;
-            font-size: 1.1rem;
+            font-size: clamp(0.9rem, 2.5vw, 1rem);
+            color: #000;
             margin: 0;
-            min-width: 150px;
+            word-wrap: break-word;
         }
 
         .cart-item-details p {
-            color: #2A2AFF;
             font-family: 'Poppins', sans-serif;
-            font-weight: 600;
-            font-size: 1rem;
+            font-weight: 400;
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
+            color: #666;
             margin: 0;
-            min-width: 80px;
         }
 
-        .cart-item form {
+        .cart-item-details .price {
+            font-weight: 600;
+            color: #000;
+        }
+
+        .quantity-controls {
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            margin-top: 0.5rem;
+            flex-shrink: 0;
         }
 
-        .cart-item input[type="number"] {
-            width: 60px;
-            padding: 0.5rem;
-            border: 1px solid #e2e8f0;
-            background: white;
-            color: #2d3748;
-            font-family: 'Poppins', sans-serif;
-            border-radius: 6px;
-            text-align: center;
-            font-weight: 500;
-        }
-
-        .cart-item input[type="number"]:focus {
-            outline: none;
-            border-color: #2A2AFF;
-            box-shadow: 0 0 0 3px rgba(42, 42, 255, 0.1);
-        }
-
-        .cart-item button {
-            background: #2A2AFF;
-            color: white;
-            border: none;
-            padding: 0.5rem 0.8rem;
-            border-radius: 6px;
+        .quantity-controls button {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ccc;
+            background: #fff;
+            border-radius: 50%;
             cursor: pointer;
-            font-family: 'Poppins', sans-serif;
-            font-size: 0.9rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            white-space: nowrap;
+            font-size: 1rem;
+            transition: background 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .cart-item button:hover {
-            background: #1f1fcc;
-            transform: scale(1.05);
+        .quantity-controls button:hover {
+            background: #f0f0f0;
         }
 
-        .cart-item button[name="remove_from_cart"] {
-            background: #ef4444;
-        }
-
-        .cart-item button[name="remove_from_cart"]:hover {
-            background: #dc2626;
-        }
-
-        /* Cart Footer */
-        .cart-footer {
-            margin-top: 2rem;
-            padding: 1.5rem;
-            background: linear-gradient(135deg, #f8fafc, #edf2f7);
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
+        .quantity-controls input {
+            width: 50px;
             text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 0.25rem;
+            font-family: 'Poppins', sans-serif;
         }
 
-        .cart-footer p {
-            color: #2A2AFF;
+        .remove-item {
+            margin-left: 1rem;
+            flex-shrink: 0;
+        }
+
+        .remove-item button {
+            background: none;
+            border: none;
+            color: #ff0000;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+
+        .remove-item button:hover {
+            background: rgba(255, 0, 0, 0.1);
+        }
+
+        /* Order Summary Section */
+        .order-summary {
+            flex: 1;
+            min-width: 300px;
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+
+        .order-summary h3 {
             font-family: 'Poppins', sans-serif;
             font-weight: 600;
-            font-size: 1.4rem;
+            font-size: clamp(1rem, 3vw, 1.2rem);
+            color: #000;
             margin-bottom: 1rem;
         }
 
-        .cta-button {
-            background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
-            color: white;
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 8px;
-            cursor: pointer;
+        .order-summary .summary-item {
+            display: flex;
+            justify-content: space-between;
             font-family: 'Poppins', sans-serif;
-            font-weight: 600;
-            font-size: 1.1rem;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .order-summary .total {
+            font-weight: 700;
+            font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+            margin-top: 1rem;
+            border-top: 1px solid #eee;
+            padding-top: 1rem;
+        }
+
+        .order-summary .promo-code {
+            display: flex;
             gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .order-summary .promo-code input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 0;
+        }
+
+        .order-summary .promo-code button {
+            padding: 0.5rem 1rem;
+            background: #000;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+            white-space: nowrap;
+        }
+
+        .order-summary .promo-code button:hover {
+            background: #333;
+        }
+
+        .order-summary .checkout-btn {
+            display: block;
+            width: 100%;
+            padding: 0.75rem;
+            background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
+            color: #fff;
+            text-align: center;
             text-decoration: none;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(42, 42, 255, 0.2);
+            border-radius: 4px;
+            margin-top: 1rem;
+            transition: background 0.3s;
+            font-size: clamp(0.9rem, 2.5vw, 1rem);
         }
 
-        .cta-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 25px rgba(42, 42, 255, 0.3);
+        .order-summary .checkout-btn:hover {
+            background: #333;
         }
 
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .navbar {
-                padding: 0.8rem 1rem;
+        /* Empty Cart */
+        .empty-cart {
+            text-align: center;
+            padding: 2rem;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .empty-cart h3 {
+            font-size: clamp(1.2rem, 3vw, 1.5rem);
+            color: #333;
+            margin-bottom: 1rem;
+        }
+
+        .empty-cart p a {
+            color: #2A2AFF;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        /* Footer Newsletter Section */
+        .newsletter {
+            width: 100%;
+            max-width: 1200px;
+            margin: 2rem auto;
+            background: #000;
+            color: #fff;
+            text-align: center;
+            padding: 2rem 1rem;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+
+        .newsletter h2 {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: clamp(1.2rem, 4vw, 1.5rem);
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        .newsletter input {
+            width: 100%;
+            max-width: 300px;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            font-size: 14px;
+        }
+
+        .newsletter button {
+            padding: 0.75rem 1.5rem;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .newsletter button:hover {
+            background: #f0f0f0;
+        }
+
+        /* ===== RESPONSIVE BREAKPOINTS ===== */
+
+        /* Large tablets and small desktops */
+        @media (max-width: 1024px) {
+            .cart-container {
+                padding: 0 1rem;
+                gap: 1.5rem;
             }
             
-            body {
-                padding-top: 70px;
+            .order-summary {
+                position: static;
+            }
+        }
+
+        /* Tablets */
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 0.75rem 1rem;
+                flex-wrap: wrap;
+                gap: 0.5rem;
             }
 
-            .cart {
-                margin: 1rem;
-                padding: 1rem;
+            .search-bar {
+                order: 3;
+                flex-basis: 100%;
+                margin: 0.5rem 0 0 0;
+                max-width: none;
+            }
+
+            .cart-container {
+                flex-direction: column;
+                gap: 1rem;
+                margin: 1rem auto;
+            }
+
+            .cart-items,
+            .order-summary {
+                min-width: 100%;
+                width: 100%;
             }
 
             .cart-item {
                 flex-direction: column;
-                text-align: center;
+                align-items: flex-start;
                 gap: 1rem;
-            }
-
-            .cart-item-details {
-                flex-direction: column;
-                align-items: center;
-                text-align: center;
-                gap: 0.5rem;
+                text-align: left;
             }
 
             .cart-item img {
-                width: 100px;
-                height: 100px;
+                width: 100%;
+                height: 200px;
+                margin-right: 0;
+                margin-bottom: 0.5rem;
             }
 
-            .nav-right {
-                gap: 1rem;
+            .cart-item-details {
+                width: 100%;
             }
 
-            .search-bar {
-                display: none;
+            .quantity-controls {
+                justify-content: center;
+                margin-top: 1rem;
+            }
+
+            .remove-item {
+                margin-left: 0;
+                align-self: center;
+                margin-top: 0.5rem;
+            }
+        }
+
+        /* Mobile devices */
+        @media (max-width: 480px) {
+            body {
+                padding-top: 120px; /* Account for wrapped navbar */
+            }
+
+            .navbar {
+                padding: 0.5rem;
+            }
+
+            .logo {
+                font-size: 1.3rem;
+                position: relative;
+                bottom: 50px;
+                right: 150px;
+                margin-left: 50px;
+            }
+            .profile-dropdown{
+                position: relative;
+                left: 90px;
+            }
+           
+
+            .cart-link span:not(.cart-count) {
+                display: none; /* Hide "Cart" text, keep count */
+            }
+
+            .cart-container {
+                padding: 0 0.5rem;
+                margin: 0.5rem auto;
+            }
+
+            .cart-items h2 {
+                font-size: 1.5rem;
+                margin-bottom: 1rem;
+            }
+
+            .cart-item {
+                padding: 0.75rem;
+                flex-direction: row;
+                align-items: center;
+            }
+
+            .cart-item img {
+                width: 60px;
+                height: 60px;
+                margin-right: 0.75rem;
+            }
+
+            .cart-item-details h3 {
+                font-size: 0.9rem;
+            }
+
+            .cart-item-details p {
+                font-size: 0.8rem;
+            }
+
+            .quantity-controls {
+                margin-top: 0.25rem;
+            }
+
+            .quantity-controls button {
+                width: 25px;
+                height: 25px;
+                font-size: 0.8rem;
+            }
+
+            .quantity-controls input {
+                width: 40px;
+                font-size: 0.8rem;
+            }
+
+            .order-summary {
+                padding: 1rem;
+            }
+
+            .newsletter {
+                margin: 1rem auto;
+                padding: 1.5rem 0.5rem;
+            }
+
+            .newsletter input {
+                margin-bottom: 0.75rem;
+            }
+        }
+
+        /* Extra small devices */
+        @media (max-width: 360px) {
+            .cart-item {
+                padding: 0.5rem;
+            }
+
+            .cart-item img {
+                width: 50px;
+                height: 50px;
+                margin-right: 0.5rem;
+            }
+
+            .quantity-controls button {
+                width: 22px;
+                height: 22px;
+            }
+
+            .quantity-controls input {
+                width: 35px;
+            }
+
+            .order-summary {
+                padding: 0.75rem;
+            }
+        }
+
+        /* Landscape orientation for mobile */
+        @media (max-height: 500px) and (orientation: landscape) {
+            body {
+                padding-top: 70px;
+            }
+
+            .navbar {
+                padding: 0.5rem;
+            }
+
+            .cart-container {
+                margin: 0.5rem auto;
+            }
+
+            .newsletter {
+                margin-top: 1rem;
+                padding: 1rem;
+            }
+        }
+       
+      
+       
+           .footer-bottom {
+            text-align: center;
+            padding: 40px;
+            background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
+            position: relative;
+            top: 265px;
+           
+            font-size: 12px;
+            color: #ffffff;
+        }
+
+        /* Print styles */
+        @media print {
+            .navbar,
+            .newsletter,
+            .remove-item,
+            .quantity-controls {
+                display: none !important;
+            }
+
+            body {
+                padding-top: 0;
+                background: white;
+                color: black;
+            }
+
+            .cart-container {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            .cart-item {
+                page-break-inside: avoid;
+                border: 1px solid #ccc;
+                margin-bottom: 1rem;
+            }
+
+            .order-summary {
+                page-break-inside: avoid;
+                border: 2px solid #000;
+                margin-top: 2rem;
+            }
+        }
+
+        /* Prevent text selection issues on mobile */
+        .quantity-controls button,
+        .remove-item button,
+        .profile-trigger {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        /* Ensure buttons are properly sized for touch */
+        @media (pointer: coarse) {
+            .quantity-controls button,
+            .remove-item button {
+                min-width: 44px;
+                min-height: 44px;
             }
         }
     </style>
@@ -562,18 +990,10 @@ $cart_count = getCartCount($conn, $user);
         <nav class="navbar" id="navbar">
             <a href="index.php" class="logo"><i class="fas fa-store"></i> Deeken</a>
           
-            <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="Search products..." onkeypress="if(event.key==='Enter') searchProducts()">
-                <button type="button" onclick="searchProducts()"><i class="fas fa-search"></i></button>
-            </div>
+            
             
             <div class="nav-right">
-                <!-- Cart Link -->
-                <a href="cart.php" class="cart-link">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span class="cart-text">Cart</span>
-                    <span class="cart-count"><?php echo $cart_count; ?></span>
-                </a>    
+               
                 
                 <!-- Profile Dropdown -->
                 <div class="profile-dropdown">
@@ -620,109 +1040,87 @@ $cart_count = getCartCount($conn, $user);
 
     <!-- ----- CART CONTENT ----- -->
     <main>
-        <section class="cart">
-            <h2><i class="fas fa-shopping-cart"></i> Your Cart</h2>
-            <div id="cartItems">
-                <?php
-                $total = 0;
-                if ($user):
-                    $stmt = $conn->prepare("SELECT c.product_id, c.quantity, p.name, p.price, p.image FROM cart c JOIN products p ON c.product_id = p.id WHERE c.user_id = ?");
-                    $stmt->bind_param("i", $user['id']);
-                    $stmt->execute();
-                    $cart_items = $stmt->get_result();
-                    
-                    if ($cart_items->num_rows > 0):
-                        while ($item = $cart_items->fetch_assoc()):
-                            $item_total = $item['price'] * $item['quantity'];
-                            $total += $item_total;
-                ?>
+        <section class="cart-container">
+            <div class="cart-items">
+                <h2>Your Cart</h2>
+                <div id="cartItems">
+                    <?php
+                    $total = 0;
+                    if ($user):
+                        $stmt = $conn->prepare("SELECT c.product_id, c.quantity, p.name, p.price, p.image FROM cart c JOIN products p ON c.product_id = p.id WHERE c.user_id = ?");
+                        $stmt->bind_param("i", $user['id']);
+                        $stmt->execute();
+                        $cart_items = $stmt->get_result();
+                        
+                        if ($cart_items && $cart_items->num_rows > 0):
+                            while ($item = $cart_items->fetch_assoc()):
+                                $item_total = $item['price'] * $item['quantity'];
+                                $total += $item_total;
+                    ?>
                     <div class="cart-item">
-                        <img src="<?php echo htmlspecialchars($item['image']); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>">
+                        <img src="<?php echo htmlspecialchars($item['image']); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" onerror="this.src='images/placeholder.jpg'">
                         <div class="cart-item-details">
                             <h3><?php echo htmlspecialchars($item['name']); ?></h3>
-                            <p>$<?php echo number_format($item['price'], 2); ?></p>
-                            <form method="POST" onsubmit="updateQuantity(event, <?php echo $item['product_id']; ?>, this.quantity.value)">
-                                <input type="number" name="quantity" value="<?php echo $item['quantity']; ?>" min="1">
+                            <p>Size: <?php echo isset($item['size']) ? htmlspecialchars($item['size']) : 'N/A'; ?></p>
+                            <p>Color: <?php echo isset($item['color']) ? htmlspecialchars($item['color']) : 'N/A'; ?></p>
+                            <p class="price">$<?php echo number_format($item['price'], 2); ?></p>
+                            <form method="POST" class="quantity-controls">
                                 <input type="hidden" name="product_id" value="<?php echo $item['product_id']; ?>">
-                                <input type="hidden" name="update_quantity">
-                                <button type="submit"><i class="fas fa-sync"></i> Update</button>
+                                <button type="submit" name="update_quantity" value="-" onclick="this.form.querySelector('input[name=quantity]').value = Math.max(1, this.form.querySelector('input[name=quantity]').value - 1)">-</button>
+                                <input type="number" name="quantity" value="<?php echo $item['quantity']; ?>" min="1" readonly>
+                                <button type="submit" name="update_quantity" value="+" onclick="this.form.querySelector('input[name=quantity]').value = parseInt(this.form.querySelector('input[name=quantity]').value) + 1">+</button>
                             </form>
-                            <p>Total: $<?php echo number_format($item_total, 2); ?></p>
-                            <form method="POST" onsubmit="removeFromCart(event, <?php echo $item['product_id']; ?>)">
+                        </div>
+                        <div class="remove-item">
+                            <form method="POST" onsubmit="return confirm('Are you sure you want to remove this item?')">
                                 <input type="hidden" name="product_id" value="<?php echo $item['product_id']; ?>">
-                                <button type="submit" name="remove_from_cart"><i class="fas fa-trash"></i> Remove</button>
+                                <button type="submit" name="remove_from_cart"><i class="fas fa-trash"></i></button>
                             </form>
                         </div>
                     </div>
-                <?php 
-                        endwhile; 
-                    else: 
-                ?>
+                    <?php 
+                            endwhile; 
+                        else: 
+                    ?>
                     <div class="empty-cart">
                         <h3>Your cart is empty</h3>
                         <p><a href="index.php">Continue shopping</a></p>
                     </div>
-                <?php 
+                    <?php 
+                        endif;
+                        if (isset($stmt)) $stmt->close(); 
                     endif;
-                    $stmt->close(); 
-                else: 
-                ?>
-                    <div class="empty-cart">
-                        <h3>Please sign in to view your cart</h3>
-                        <p><a href="login.php">Login</a> or <a href="register.php">Create Account</a></p>
-                    </div>
-                <?php endif; ?>
+                    ?>
+                </div>
             </div>
-            
-            <?php if ($user && $total > 0): ?>
-            <div class="cart-footer">
-                <p>Total: $<span id="cartTotal"><?php echo number_format($total, 2); ?></span></p>
-                <a href="checkout.php" class="cta-button"><i class="fas fa-check"></i> Proceed to Checkout</a>
+
+            <?php if ($user && $cart_items && $cart_items->num_rows > 0): ?>
+            <div class="order-summary">
+                <h3>Order Summary</h3>
+                <div class="summary-item">Subtotal<span>$<?php echo number_format($total, 2); ?></span></div>
+                <div class="summary-item">Delivery Fee<span>$<?php echo number_format($delivery_fee, 2); ?></span></div>
+                <div class="summary-item total">Total<span>$<?php echo number_format($total + $delivery_fee, 2); ?></span></div>
+                <div class="promo-code">
+                    <input type="text" placeholder="Add promo code">
+                    <button type="button">Apply</button>
+                </div>
+                <a href="checkout.php" class="checkout-btn">Go to Checkout <i class="fas fa-arrow-right"></i></a>
             </div>
             <?php endif; ?>
         </section>
+
+        <?php if ($user && $cart_items && $cart_items->num_rows > 0): ?>
+       
+        <?php endif; ?>
     </main>
-
+  <footer class="footer">
+        <div class="footer-bottom">
+            <p>© <?php echo date('Y'); ?> Deeken. All Rights Reserved.</p>
+        </div>
+    </footer>
     <!-- ----- JAVASCRIPT ----- -->
-    <script src="utils.js"></script>
-     <script src ="hamburger.js"></script>
-      <script src ="utils.js"></script>
-   
     <script>
-        // Navbar scroll hide/show functionality
-        let lastScrollTop = 0;
-        const navbar = document.getElementById('navbar');
-        const scrollThreshold = 100; // Start hiding after 100px of scroll
-
-        window.addEventListener('scroll', function() {
-            const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-            
-            // Skip if we haven't scrolled enough
-            if (currentScroll < scrollThreshold) {
-                navbar.classList.remove('navbar-hidden');
-                navbar.classList.add('navbar-visible');
-                return;
-            }
-            
-            // Scrolling down
-            if (currentScroll > lastScrollTop && currentScroll > scrollThreshold) {
-                navbar.classList.add('navbar-hidden');
-                navbar.classList.remove('navbar-visible');
-            } 
-            // Scrolling up
-            else if (currentScroll < lastScrollTop) {
-                navbar.classList.remove('navbar-hidden');
-                navbar.classList.add('navbar-visible');
-            }
-            
-            lastScrollTop = currentScroll <= 0 ? 0 : currentScroll; // For mobile or negative scrolling
-        });
-
-<script src="utils.js"></script>
-<script src="hamburger.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Toggle profile dropdown
+        // Global functions
         function toggleProfileDropdown() {
             const dropdown = document.getElementById('profileDropdown');
             if (dropdown) {
@@ -730,73 +1128,67 @@ $cart_count = getCartCount($conn, $user);
             }
         }
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
-            const profileDropdown = document.querySelector('.profile-dropdown');
-            const dropdown = document.getElementById('profileDropdown');
-            if (profileDropdown && dropdown && !profileDropdown.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        // Ensure the toggle function is globally available
-        window.toggleProfileDropdown = toggleProfileDropdown;
-
-        // Navbar scroll hide/show functionality
-        let lastScrollTop = 0;
-        const navbar = document.getElementById('navbar');
-        const scrollThreshold = 100; // Start hiding after 100px of scroll
-        if (navbar) {
-            window.addEventListener('scroll', function() {
-                const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-                if (currentScroll < scrollThreshold) {
-                    navbar.classList.remove('navbar-hidden');
-                    navbar.classList.add('navbar-visible');
-                    return;
-                }
-                if (currentScroll > lastScrollTop && currentScroll > scrollThreshold) {
-                    navbar.classList.add('navbar-hidden');
-                    navbar.classList.remove('navbar-visible');
-                } else if (currentScroll < lastScrollTop) {
-                    navbar.classList.remove('navbar-hidden');
-                    navbar.classList.add('navbar-visible');
-                }
-                lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
-            });
-        }
-
-        // Search products
         function searchProducts() {
             const search = document.getElementById('searchInput').value;
-            window.location.href = `index.php?search=${encodeURIComponent(search)}`;
-        }
-
-        // Update cart quantity via AJAX
-        function updateQuantity(event, productId, quantity) {
-            event.preventDefault();
-            fetch('cart.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `update_quantity=1&product_id=${productId}&quantity=${quantity}`
-            }).then(() => window.location.reload());
-        }
-
-        // Remove from cart via AJAX
-        function removeFromCart(event, productId) {
-            event.preventDefault();
-            if (confirm('Are you sure you want to remove this item from your cart?')) {
-                fetch('cart.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `remove_from_cart=1&product_id=${productId}`
-                }).then(() => window.location.reload());
+            if (search.trim()) {
+                window.location.href = `index.php?search=${encodeURIComponent(search)}`;
             }
         }
-    });
-</script>
+
+        // DOM Ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                const profileDropdown = document.querySelector('.profile-dropdown');
+                const dropdown = document.getElementById('profileDropdown');
+                if (profileDropdown && dropdown && !profileDropdown.contains(event.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+
+            // Navbar scroll hide/show functionality
+            let lastScrollTop = 0;
+            const navbar = document.getElementById('navbar');
+            const scrollThreshold = 100;
+            
+            if (navbar) {
+                window.addEventListener('scroll', function() {
+                    const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+                    
+                    if (currentScroll < scrollThreshold) {
+                        navbar.classList.remove('navbar-hidden');
+                        navbar.classList.add('navbar-visible');
+                        return;
+                    }
+                    
+                    if (currentScroll > lastScrollTop && currentScroll > scrollThreshold) {
+                        navbar.classList.add('navbar-hidden');
+                        navbar.classList.remove('navbar-visible');
+                    } else if (currentScroll < lastScrollTop) {
+                        navbar.classList.remove('navbar-hidden');
+                        navbar.classList.add('navbar-visible');
+                    }
+                    
+                    lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+                });
+            }
+
+            // Search on Enter key
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        searchProducts();
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>
 <?php
 // ----- CLEANUP -----
-$conn->close();
+if (isset($conn)) {
+    $conn->close();
+}
 ?>

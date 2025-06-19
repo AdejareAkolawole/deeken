@@ -1,31 +1,28 @@
 <?php
-include 'config.php';
-
-// Enable error reporting for debugging (remove in production)
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+require_once 'config.php';
 
 header('Content-Type: application/json');
 
-$query = isset($_GET['q']) ? sanitize($conn, $_GET['q']) : '';
-$results = [];
+$query = $_GET['q'] ?? '';
+$query = trim($query);
 
 if (strlen($query) >= 2) {
-    $stmt = $conn->prepare("SELECT id, name FROM products WHERE name LIKE ? LIMIT 10");
-    $search_term = "%$query%";
-    $stmt->bind_param("s", $search_term);
+    $stmt = $conn->prepare("SELECT id, name, image FROM products WHERE name LIKE ? LIMIT 10");
+    $searchTerm = "%$query%";
+    $stmt->bind_param("s", $searchTerm);
     $stmt->execute();
     $result = $stmt->get_result();
+    $products = [];
     while ($row = $result->fetch_assoc()) {
-        $results[] = [
+        $products[] = [
             'id' => $row['id'],
-            'name' => $row['name']
+            'name' => $row['name'],
+            'image' => $row['image']
         ];
     }
     $stmt->close();
+    echo json_encode($products);
+} else {
+    echo json_encode([]);
 }
-
-echo json_encode($results);
-$conn->close();
 ?>
