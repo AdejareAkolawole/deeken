@@ -93,41 +93,49 @@ function handleImageUpload($file_key, $existing_path, $target_dir, $prefix = 'im
 if (!isset($_POST['action'])) {
     ob_clean();
     header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'No action specified']);
+    echo json_encode(['success' => false, 'data' => null, 'message' => 'No action specified']);
     exit;
 }
 
 switch ($_POST['action']) {
     case 'fetch_hero_section':
-        $hero = [];
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         try {
             $stmt = $conn->prepare("SELECT id, title, description, button_text, main_image, sparkle_image_1, sparkle_image_2 FROM hero_section WHERE id = 1");
             $stmt->execute();
             $hero = $stmt->get_result()->fetch_assoc();
             $stmt->close();
-            // Use placeholders if images are missing or invalid
             if ($hero) {
                 $hero['main_image'] = $hero['main_image'] && file_exists($hero['main_image']) ? $hero['main_image'] : 'https://via.placeholder.com/150';
                 $hero['sparkle_image_1'] = $hero['sparkle_image_1'] && file_exists($hero['sparkle_image_1']) ? $hero['sparkle_image_1'] : 'https://via.placeholder.com/50';
                 $hero['sparkle_image_2'] = $hero['sparkle_image_2'] && file_exists($hero['sparkle_image_2']) ? $hero['sparkle_image_2'] : 'https://via.placeholder.com/50';
+                $response['success'] = true;
+                $response['data'] = $hero;
+                $response['message'] = 'Hero section fetched successfully.';
+            } else {
+                $response['data'] = [
+                    'id' => 1,
+                    'title' => 'Welcome to Deeken',
+                    'description' => 'Discover our amazing products.',
+                    'button_text' => 'Shop Now',
+                    'main_image' => 'https://via.placeholder.com/150',
+                    'sparkle_image_1' => 'https://via.placeholder.com/50',
+                    'sparkle_image_2' => 'https://via.placeholder.com/50'
+                ];
+                $response['success'] = true;
+                $response['message'] = 'Default hero section data provided.';
             }
         } catch (Exception $e) {
+            $response['message'] = 'Failed to fetch hero section: ' . $e->getMessage();
             error_log("Fetch hero section error: " . $e->getMessage());
         }
         ob_clean();
         header('Content-Type: application/json');
-        echo json_encode($hero ?: [
-            'id' => 1,
-            'title' => 'Welcome to Deeken',
-            'description' => 'Discover our amazing products.',
-            'button_text' => 'Shop Now',
-            'main_image' => 'https://via.placeholder.com/150',
-            'sparkle_image_1' => 'https://via.placeholder.com/50',
-            'sparkle_image_2' => 'https://via.placeholder.com/50'
-        ]);
+        echo json_encode($response);
         exit;
 
     case 'update_hero_section':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         error_log("Starting update_hero_section handler");
         $title = trim($_POST['title'] ?? '');
         $description = trim($_POST['description'] ?? '');
@@ -135,7 +143,6 @@ switch ($_POST['action']) {
         $existing_main_image = trim($_POST['existing_main_image'] ?? '');
         $existing_sparkle_1 = trim($_POST['existing_sparkle_1'] ?? '');
         $existing_sparkle_2 = trim($_POST['existing_sparkle_2'] ?? '');
-        $response = ['success' => false, 'message' => ''];
 
         error_log("Input data: " . print_r([
             'title' => $title,
@@ -195,7 +202,6 @@ switch ($_POST['action']) {
             if (!$response['message']) {
                 $conn->begin_transaction();
                 try {
-                    // Check if hero_section row exists, insert if not
                     $stmt = $conn->prepare("SELECT COUNT(*) as count FROM hero_section WHERE id = 1");
                     $stmt->execute();
                     $exists = $stmt->get_result()->fetch_assoc()['count'] > 0;
@@ -236,8 +242,8 @@ switch ($_POST['action']) {
         exit;
 
     case 'search_products':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $search = isset($_POST['search']) ? trim($_POST['search']) : '';
-        $products = [];
         try {
             $query = "
                 SELECT p.id, p.name, p.sku, p.price, p.description, i.stock_quantity, p.image, c.name AS category, c.id AS category_id, ma.attribute AS misc_attribute, p.featured
@@ -253,21 +259,26 @@ switch ($_POST['action']) {
             $stmt->bind_param("ssi", $search_param, $search_param, $id_search);
             $stmt->execute();
             $result = $stmt->get_result();
+            $products = [];
             while ($row = $result->fetch_assoc()) {
                 $products[] = $row;
             }
             $stmt->close();
+            $response['success'] = true;
+            $response['data'] = $products;
+            $response['message'] = 'Products fetched successfully.';
         } catch (Exception $e) {
+            $response['message'] = 'Failed to search products: ' . $e->getMessage();
             error_log("Search products error: " . $e->getMessage());
         }
         ob_clean();
         header('Content-Type: application/json');
-        echo json_encode($products);
+        echo json_encode($response);
         exit;
 
     case 'fetch_orders':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $status = isset($_POST['status']) && $_POST['status'] !== 'all' ? $_POST['status'] : null;
-        $orders = [];
         try {
             $query = "
                 SELECT o.id, o.user_id, u.full_name, o.total, o.delivery_fee, o.status, o.created_at, o.address_id
@@ -284,22 +295,30 @@ switch ($_POST['action']) {
             }
             $stmt->execute();
             $result = $stmt->get_result();
+            $orders = [];
             while ($row = $result->fetch_assoc()) {
                 $orders[] = $row;
             }
             $stmt->close();
+            $response['success'] = true;
+            $response['data'] = $orders;
+            $response['message'] = 'Orders fetched successfully.';
         } catch (Exception $e) {
+            $response['message'] = 'Failed to fetch orders: ' . $e->getMessage();
             error_log("Fetch orders error: " . $e->getMessage());
         }
         ob_clean();
         header('Content-Type: application/json');
-        echo json_encode($orders);
+        echo json_encode($response);
         exit;
 
     case 'fetch_order_details':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $order_id = (int)($_POST['order_id'] ?? 0);
-        $order = [];
         try {
+            if ($order_id <= 0) {
+                throw new Exception('Invalid order ID.');
+            }
             $stmt = $conn->prepare("
                 SELECT o.id, o.user_id, u.full_name, u.email, u.phone, u.address, o.total, o.delivery_fee, o.status, o.created_at
                 FROM orders o
@@ -310,6 +329,10 @@ switch ($_POST['action']) {
             $stmt->execute();
             $order['info'] = $stmt->get_result()->fetch_assoc();
             $stmt->close();
+
+            if (!$order['info']) {
+                throw new Exception('Order not found.');
+            }
 
             $stmt = $conn->prepare("
                 SELECT oi.quantity, oi.price, p.name, p.sku
@@ -325,46 +348,60 @@ switch ($_POST['action']) {
                 $order['items'][] = $row;
             }
             $stmt->close();
+            $response['success'] = true;
+            $response['data'] = $order;
+            $response['message'] = 'Order details fetched successfully.';
         } catch (Exception $e) {
+            $response['message'] = 'Failed to fetch order details: ' . $e->getMessage();
             error_log("Fetch order details error: " . $e->getMessage());
         }
         ob_clean();
         header('Content-Type: application/json');
-        echo json_encode($order);
+        echo json_encode($response);
         exit;
 
     case 'fetch_categories':
-        $categories = [];
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         try {
             $result = $conn->query("SELECT id, name, description, created_at FROM categories");
+            $categories = [];
             while ($row = $result->fetch_assoc()) {
                 $categories[] = $row;
             }
+            $response['success'] = true;
+            $response['data'] = $categories;
+            $response['message'] = 'Categories fetched successfully.';
         } catch (Exception $e) {
+            $response['message'] = 'Failed to fetch categories: ' . $e->getMessage();
             error_log("Fetch categories error: " . $e->getMessage());
         }
         ob_clean();
         header('Content-Type: application/json');
-        echo json_encode($categories);
+        echo json_encode($response);
         exit;
 
     case 'fetch_users':
-        $users = [];
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         try {
             $result = $conn->query("SELECT id, email, full_name, phone, is_admin, created_at FROM users");
+            $users = [];
             while ($row = $result->fetch_assoc()) {
                 $users[] = $row;
             }
+            $response['success'] = true;
+            $response['data'] = $users;
+            $response['message'] = 'Users fetched successfully.';
         } catch (Exception $e) {
+            $response['message'] = 'Failed to fetch users: ' . $e->getMessage();
             error_log("Fetch users error: " . $e->getMessage());
         }
         ob_clean();
         header('Content-Type: application/json');
-        echo json_encode($users);
+        echo json_encode($response);
         exit;
 
     case 'fetch_reviews':
-        $reviews = [];
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         try {
             $result = $conn->query("
                 SELECT r.id, r.product_id, p.name AS product_name, r.user_id, u.full_name, r.rating, r.review_text, r.created_at
@@ -372,18 +409,24 @@ switch ($_POST['action']) {
                 JOIN products p ON r.product_id = p.id
                 JOIN users u ON r.user_id = u.id
             ");
+            $reviews = [];
             while ($row = $result->fetch_assoc()) {
                 $reviews[] = $row;
             }
+            $response['success'] = true;
+            $response['data'] = $reviews;
+            $response['message'] = 'Reviews fetched successfully.';
         } catch (Exception $e) {
+            $response['message'] = 'Failed to fetch reviews: ' . $e->getMessage();
             error_log("Fetch reviews error: " . $e->getMessage());
         }
         ob_clean();
         header('Content-Type: application/json');
-        echo json_encode($reviews);
+        echo json_encode($response);
         exit;
 
     case 'add_product':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         error_log("Starting add_product handler");
         $product_name = trim($_POST['name'] ?? '');
         $price = (float)($_POST['price'] ?? 0);
@@ -393,7 +436,6 @@ switch ($_POST['action']) {
         $featured = isset($_POST['featured']) ? 1 : 0;
         $description = trim($_POST['description'] ?? '');
         $image_url = 'https://via.placeholder.com/150';
-        $response = ['success' => false, 'message' => ''];
 
         error_log("Input data: " . print_r([
             'name' => $product_name,
@@ -482,6 +524,7 @@ switch ($_POST['action']) {
         exit;
 
     case 'edit_product':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $product_id = (int)($_POST['product_id'] ?? 0);
         $product_name = trim($_POST['name'] ?? '');
         $price = (float)($_POST['price'] ?? 0);
@@ -491,7 +534,6 @@ switch ($_POST['action']) {
         $featured = isset($_POST['featured']) ? 1 : 0;
         $description = trim($_POST['description'] ?? '');
         $image_url = $_POST['existing_image'] ?? 'https://via.placeholder.com/150';
-        $response = ['success' => false, 'message' => ''];
 
         if (empty($product_name)) {
             $response['message'] = 'Product name is required.';
@@ -565,42 +607,46 @@ switch ($_POST['action']) {
         exit;
 
     case 'delete_product':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $product_id = (int)($_POST['product_id'] ?? 0);
-        $response = ['success' => false, 'message' => ''];
-        $conn->begin_transaction();
-        try {
-            $stmt = $conn->prepare("SELECT image FROM products WHERE id = ?");
-            $stmt->bind_param("i", $product_id);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            if ($row = $result->fetch_assoc()) {
-                $image_path = $row['image'];
-                if ($image_path !== 'https://via.placeholder.com/150' && file_exists($image_path)) {
-                    unlink($image_path);
+        if ($product_id <= 0) {
+            $response['message'] = 'Invalid product ID.';
+        } else {
+            $conn->begin_transaction();
+            try {
+                $stmt = $conn->prepare("SELECT image FROM products WHERE id = ?");
+                $stmt->bind_param("i", $product_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                if ($row = $result->fetch_assoc()) {
+                    $image_path = $row['image'];
+                    if ($image_path !== 'https://via.placeholder.com/150' && file_exists($image_path)) {
+                        unlink($image_path);
+                    }
                 }
-            }
-            $stmt->close();
+                $stmt->close();
 
-            $tables = ['cart', 'order_items', 'reviews', 'inventory', 'miscellaneous_attributes'];
-            foreach ($tables as $table) {
-                $stmt = $conn->prepare("DELETE FROM $table WHERE product_id = ?");
+                $tables = ['cart', 'order_items', 'reviews', 'inventory', 'miscellaneous_attributes'];
+                foreach ($tables as $table) {
+                    $stmt = $conn->prepare("DELETE FROM $table WHERE product_id = ?");
+                    $stmt->bind_param("i", $product_id);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+
+                $stmt = $conn->prepare("DELETE FROM products WHERE id = ?");
                 $stmt->bind_param("i", $product_id);
                 $stmt->execute();
                 $stmt->close();
+
+                $conn->commit();
+                $response['success'] = true;
+                $response['message'] = 'Product deleted successfully.';
+            } catch (Exception $e) {
+                $conn->rollback();
+                $response['message'] = 'Failed to delete product: ' . $e->getMessage();
+                error_log("Product deletion error: " . $e->getMessage());
             }
-
-            $stmt = $conn->prepare("DELETE FROM products WHERE id = ?");
-            $stmt->bind_param("i", $product_id);
-            $stmt->execute();
-            $stmt->close();
-
-            $conn->commit();
-            $response['success'] = true;
-            $response['message'] = 'Product deleted successfully.';
-        } catch (Exception $e) {
-            $conn->rollback();
-            $response['message'] = 'Failed to delete product: ' . $e->getMessage();
-            error_log("Product deletion error: " . $e->getMessage());
         }
         ob_clean();
         header('Content-Type: application/json');
@@ -608,9 +654,9 @@ switch ($_POST['action']) {
         exit;
 
     case 'add_category':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $category_name = trim($_POST['name'] ?? '');
         $description = trim($_POST['description'] ?? '');
-        $response = ['success' => false, 'message' => ''];
         if (empty($category_name)) {
             $response['message'] = 'Category name is required.';
         } else {
@@ -618,6 +664,7 @@ switch ($_POST['action']) {
                 $stmt = $conn->prepare("INSERT INTO categories (name, description) VALUES (?, ?)");
                 $stmt->bind_param("ss", $category_name, $description);
                 $stmt->execute();
+                $response['data'] = ['id' => $conn->insert_id];
                 $stmt->close();
                 $response['success'] = true;
                 $response['message'] = 'Category added successfully.';
@@ -632,12 +679,14 @@ switch ($_POST['action']) {
         exit;
 
     case 'edit_category':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $category_id = (int)($_POST['category_id'] ?? 0);
         $category_name = trim($_POST['name'] ?? '');
         $description = trim($_POST['description'] ?? '');
-        $response = ['success' => false, 'message' => ''];
         if (empty($category_name)) {
             $response['message'] = 'Category name is required.';
+        } elseif ($category_id <= 0) {
+            $response['message'] = 'Invalid category ID.';
         } else {
             try {
                 $stmt = $conn->prepare("UPDATE categories SET name = ?, description = ? WHERE id = ?");
@@ -657,25 +706,29 @@ switch ($_POST['action']) {
         exit;
 
     case 'delete_category':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $category_id = (int)($_POST['category_id'] ?? 0);
-        $response = ['success' => false, 'message' => ''];
-        try {
-            $stmt = $conn->prepare("SELECT COUNT(*) as count FROM products WHERE category_id = ?");
-            $stmt->bind_param("i", $category_id);
-            $stmt->execute();
-            if ($stmt->get_result()->fetch_assoc()['count'] > 0) {
-                $response['message'] = 'Cannot delete category because it has associated products.';
-            } else {
-                $stmt = $conn->prepare("DELETE FROM categories WHERE id = ?");
+        if ($category_id <= 0) {
+            $response['message'] = 'Invalid category ID.';
+        } else {
+            try {
+                $stmt = $conn->prepare("SELECT COUNT(*) as count FROM products WHERE category_id = ?");
                 $stmt->bind_param("i", $category_id);
                 $stmt->execute();
-                $stmt->close();
-                $response['success'] = true;
-                $response['message'] = 'Category deleted successfully.';
+                if ($stmt->get_result()->fetch_assoc()['count'] > 0) {
+                    $response['message'] = 'Cannot delete category because it has associated products.';
+                } else {
+                    $stmt = $conn->prepare("DELETE FROM categories WHERE id = ?");
+                    $stmt->bind_param("i", $category_id);
+                    $stmt->execute();
+                    $stmt->close();
+                    $response['success'] = true;
+                    $response['message'] = 'Category deleted successfully.';
+                }
+            } catch (Exception $e) {
+                $response['message'] = 'Failed to delete category: ' . $e->getMessage();
+                error_log("Category deletion error: " . $e->getMessage());
             }
-        } catch (Exception $e) {
-            $response['message'] = 'Failed to delete category: ' . $e->getMessage();
-            error_log("Category deletion error: " . $e->getMessage());
         }
         ob_clean();
         header('Content-Type: application/json');
@@ -683,12 +736,12 @@ switch ($_POST['action']) {
         exit;
 
     case 'add_user':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $email = trim($_POST['email'] ?? '');
         $full_name = trim($_POST['full_name'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $is_admin = isset($_POST['is_admin']) ? 1 : 0;
         $password = trim($_POST['password'] ?? '');
-        $response = ['success' => false, 'message' => ''];
         if (empty($email) || empty($full_name) || empty($phone) || empty($password)) {
             $response['message'] = 'All fields are required.';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -707,6 +760,7 @@ switch ($_POST['action']) {
                     $stmt = $conn->prepare("INSERT INTO users (email, password, full_name, phone, is_admin, address) VALUES (?, ?, ?, ?, ?, 'No address provided')");
                     $stmt->bind_param("ssssi", $email, $hashed_password, $full_name, $phone, $is_admin);
                     $stmt->execute();
+                    $response['data'] = ['id' => $conn->insert_id];
                     $stmt->close();
                     $response['success'] = true;
                     $response['message'] = 'User added successfully.';
@@ -722,16 +776,18 @@ switch ($_POST['action']) {
         exit;
 
     case 'edit_user':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $user_id = (int)($_POST['user_id'] ?? 0);
         $email = trim($_POST['email'] ?? '');
         $full_name = trim($_POST['full_name'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $is_admin = isset($_POST['is_admin']) ? 1 : 0;
-        $response = ['success' => false, 'message' => ''];
         if (empty($email) || empty($full_name) || empty($phone)) {
             $response['message'] = 'All fields are required.';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $response['message'] = 'Invalid email format.';
+        } elseif ($user_id <= 0) {
+            $response['message'] = 'Invalid user ID.';
         } else {
             try {
                 $stmt = $conn->prepare("UPDATE users SET email = ?, full_name = ?, phone = ?, is_admin = ? WHERE id = ?");
@@ -751,9 +807,11 @@ switch ($_POST['action']) {
         exit;
 
     case 'delete_user':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $user_id = (int)($_POST['user_id'] ?? 0);
-        $response = ['success' => false, 'message' => ''];
-        if ($user_id === $user['id']) {
+        if ($user_id <= 0) {
+            $response['message'] = 'Invalid user ID.';
+        } elseif ($user_id === $user['id']) {
             $response['message'] = 'Cannot delete the current user.';
         } else {
             try {
@@ -781,10 +839,9 @@ switch ($_POST['action']) {
         exit;
 
     case 'ship_order':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $order_id = (int)($_POST['order_id'] ?? 0);
         $estimated_delivery_days = (int)($_POST['estimated_delivery_days'] ?? 0);
-        $response = ['success' => false, 'message' => ''];
-
         if ($order_id <= 0) {
             $response['message'] = 'Invalid order ID.';
         } elseif ($estimated_delivery_days <= 0) {
@@ -835,18 +892,22 @@ switch ($_POST['action']) {
         exit;
 
     case 'delete_review':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $review_id = (int)($_POST['review_id'] ?? 0);
-        $response = ['success' => false, 'message' => ''];
-        try {
-            $stmt = $conn->prepare("DELETE FROM reviews WHERE id = ?");
-            $stmt->bind_param("i", $review_id);
-            $stmt->execute();
-            $stmt->close();
-            $response['success'] = true;
-            $response['message'] = 'Review deleted successfully.';
-        } catch (Exception $e) {
-            $response['message'] = 'Failed to delete review: ' . $e->getMessage();
-            error_log("Review deletion error: " . $e->getMessage());
+        if ($review_id <= 0) {
+            $response['message'] = 'Invalid review ID.';
+        } else {
+            try {
+                $stmt = $conn->prepare("DELETE FROM reviews WHERE id = ?");
+                $stmt->bind_param("i", $review_id);
+                $stmt->execute();
+                $stmt->close();
+                $response['success'] = true;
+                $response['message'] = 'Review deleted successfully.';
+            } catch (Exception $e) {
+                $response['message'] = 'Failed to delete review: ' . $e->getMessage();
+                error_log("Review deletion error: " . $e->getMessage());
+            }
         }
         ob_clean();
         header('Content-Type: application/json');
@@ -854,10 +915,10 @@ switch ($_POST['action']) {
         exit;
 
     case 'change_password':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
         $current_password = trim($_POST['current_password'] ?? '');
         $new_password = trim($_POST['new_password'] ?? '');
         $confirm_password = trim($_POST['confirm_password'] ?? '');
-        $response = ['success' => false, 'message' => ''];
         if (empty($current_password) || empty($new_password) || empty($confirm_password)) {
             $response['message'] = 'All fields are required.';
         } elseif ($new_password !== $confirm_password) {
@@ -892,10 +953,129 @@ switch ($_POST['action']) {
         echo json_encode($response);
         exit;
 
+    case 'fetch_static_pages':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
+        try {
+            $result = $conn->query("SELECT page_key, title, description, meta_description, sections FROM static_pages");
+            $pages = [];
+            while ($row = $result->fetch_assoc()) {
+                $row['sections'] = json_decode($row['sections'], true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    error_log("JSON decode error for page {$row['page_key']}: " . json_last_error_msg());
+                    $row['sections'] = [];
+                }
+                $pages[] = $row;
+            }
+            $response['success'] = true;
+            $response['data'] = $pages;
+            $response['message'] = 'Static pages fetched successfully.';
+        } catch (Exception $e) {
+            $response['message'] = 'Failed to fetch static pages: ' . $e->getMessage();
+            error_log("Fetch static pages error: " . $e->getMessage());
+        }
+        ob_clean();
+        header('Content-Type: application/json');
+        echo json_encode($response);
+        exit;
+
+    case 'update_static_page':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
+        error_log("Starting update_static_page handler");
+        $page_key = trim($_POST['page_key'] ?? '');
+        $title = trim($_POST['title'] ?? '');
+        $description = trim($_POST['title'] ?? '');
+        $meta_description = trim($_POST['meta_description'] ?? '');
+        $sections = json_decode($_POST['sections'] ?? '[]', true);
+
+        error_log("Input data: " . print_r([
+            'page_key' => $page_key,
+            'title' => $title,
+            'description' => $description,
+            'meta_description' => $meta_description,
+            'sections' => $sections
+        ], true));
+
+        if (empty($page_key) || empty($title) || empty($description) || empty($meta_description)) {
+            $response['message'] = 'All fields are required.';
+        } elseif (json_last_error() !== JSON_ERROR_NONE) {
+            $response['message'] = 'Invalid sections format.';
+            error_log("JSON decode error for sections: " . json_last_error_msg());
+        } else {
+            $valid_pages = ['about', 'contact', 'careers', 'support', 'shipping', 'terms', 'privacy', 'faq', 'blog', 'size-guide', 'care-instructions'];
+            if (!in_array($page_key, $valid_pages)) {
+                $response['message'] = 'Invalid page key.';
+            } else {
+                foreach ($sections as $index => $section) {
+                    if (empty($section['heading']) || empty($section['text'])) {
+                        $response['message'] = "Section " . ($index + 1) . " is missing heading or text.";
+                        break;
+                    }
+                    if ($page_key === 'faq' && empty($section['id'])) {
+                        $response['message'] = "Section " . ($index + 1) . " is missing ID for FAQ page.";
+                        break;
+                    }
+                }
+            }
+
+            if (!$response['message']) {
+                $conn->begin_transaction();
+                try {
+                    $stmt = $conn->prepare("
+                        UPDATE static_pages 
+                        SET title = ?, description = ?, meta_description = ?, sections = ?
+                        WHERE page_key = ?
+                    ");
+                    $sections_json = json_encode($sections);
+                    $stmt->bind_param("sssss", $title, $description, $meta_description, $sections_json, $page_key);
+                    if (!$stmt->execute()) {
+                        throw new Exception("Database update failed: " . $stmt->error);
+                    }
+                    $stmt->close();
+                    $conn->commit();
+                    $response['success'] = true;
+                    $response['message'] = 'Page updated successfully.';
+                } catch (Exception $e) {
+                    $conn->rollback();
+                    $response['message'] = 'Failed to update page: ' . $e->getMessage();
+                    error_log("Static page update error: " . $e->getMessage());
+                }
+            }
+        }
+        ob_clean();
+        header('Content-Type: application/json');
+        echo json_encode($response);
+        exit;
+
+    case 'fetch_overview_stats':
+        $response = ['success' => false, 'data' => null, 'message' => ''];
+        try {
+            $stats = [];
+            $stmt = $conn->prepare("SELECT COUNT(*) as total_orders, SUM(total + delivery_fee) as total_revenue FROM orders");
+            $stmt->execute();
+            $stats = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            $stmt = $conn->prepare("SELECT COUNT(*) as pending_orders FROM orders WHERE status = 'pending'");
+            $stmt->execute();
+            $stats['pending_orders'] = $stmt->get_result()->fetch_assoc()['pending_orders'];
+            $stmt->close();
+
+            $response['success'] = true;
+            $response['data'] = $stats;
+            $response['message'] = 'Overview stats fetched successfully.';
+        } catch (Exception $e) {
+            $response['message'] = 'Failed to fetch overview stats: ' . $e->getMessage();
+            error_log("Fetch overview stats error: " . $e->getMessage());
+        }
+        ob_clean();
+        header('Content-Type: application/json');
+        echo json_encode($response);
+        exit;
+
     default:
         ob_clean();
         header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'message' => 'Invalid action']);
+        echo json_encode(['success' => false, 'data' => null, 'message' => 'Invalid action']);
         exit;
 }
 

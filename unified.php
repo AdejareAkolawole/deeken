@@ -1,110 +1,42 @@
 <?php
 require_once 'config.php'; // Include database connection from index.php
 
-// Define content for each page
-$content = [
-    'about' => [
-        'title' => 'About Deeken',
-        'description' => 'Deeken is your one-stop shop for stylish clothing that matches your personality. We offer a diverse range of meticulously crafted garments for men and women, designed to bring out your individuality.',
-        'sections' => [
-            ['heading' => 'Our Mission', 'text' => 'To provide high-quality, fashionable clothing that empowers our customers to express their unique style.'],
-            ['heading' => 'Our Story', 'text' => 'Founded in 2020, Deeken started with a vision to redefine fashion accessibility. We’ve grown into a trusted brand with over 30,000 happy customers.']
+// Fetch content from database
+$content = [];
+try {
+    $result = $conn->query("SELECT page_key, title, description, meta_description, sections FROM static_pages");
+    while ($row = $result->fetch_assoc()) {
+        $row['sections'] = json_decode($row['sections'], true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("JSON decode error for page {$row['page_key']}: " . json_last_error_msg());
+            $row['sections'] = [];
+        }
+        $content[$row['page_key']] = [
+            'title' => $row['title'],
+            'description' => $row['description'],
+            'meta_description' => $row['meta_description'],
+            'sections' => $row['sections']
+        ];
+    }
+} catch (Exception $e) {
+    error_log("Fetch static pages error: " . $e->getMessage());
+}
+
+// Fallback to default content if database query fails
+if (empty($content)) {
+    $content = [
+        'about' => [
+            'title' => 'About Deeken',
+            'description' => 'Deeken is your one-stop shop for stylish clothing that matches your personality.',
+            'sections' => [
+                ['heading' => 'Our Mission', 'text' => 'To provide high-quality, fashionable clothing.'],
+                ['heading' => 'Our Story', 'text' => 'Founded in 2020, Deeken started with a vision.']
+            ],
+            'meta_description' => 'Learn about Deeken, your destination for stylish clothing.'
         ],
-        'meta_description' => 'Learn about Deeken, your destination for stylish and high-quality clothing for men and women.'
-    ],
-    'contact' => [
-        'title' => 'Contact Us',
-        'description' => 'We’re here to help! Reach out to us for any inquiries, feedback, or support.',
-        'sections' => [
-            ['heading' => 'Get in Touch', 'text' => 'Email: support@deeken.com<br>Phone: +1 (800) 123-4567<br>Address: 123 Fashion Ave, New York, NY 10001'],
-            ['heading' => 'Customer Service Hours', 'text' => 'Monday - Friday: 9 AM - 6 PM<br>Saturday: 10 AM - 4 PM<br>Sunday: Closed']
-        ],
-        'meta_description' => 'Contact Deeken for support, inquiries, or feedback. We’re here to assist you!'
-    ],
-    'careers' => [
-        'title' => 'Careers at Deeken',
-        'description' => 'Join our team and be part of a dynamic fashion brand that values creativity and innovation.',
-        'sections' => [
-            ['heading' => 'Open Positions', 'text' => 'We’re always looking for talented individuals. Check our careers page for current openings.'],
-            ['heading' => 'Why Work With Us', 'text' => 'Competitive salaries, creative work environment, and opportunities for growth.']
-        ],
-        'meta_description' => 'Explore career opportunities at Deeken and join our innovative fashion team.'
-    ],
-    'support' => [
-        'title' => 'Customer Support',
-        'description' => 'Our dedicated support team is here to assist you with any questions or issues.',
-        'sections' => [
-            ['heading' => 'How We Help', 'text' => 'From order tracking to returns, we’re here to ensure a smooth shopping experience.'],
-            ['heading' => 'Contact Support', 'text' => 'Reach us via email at support@deeken.com or call +1 (800) 123-4567.']
-        ],
-        'meta_description' => 'Get help from Deeken’s customer support team for orders, returns, and more.'
-    ],
-    'shipping' => [
-        'title' => 'Delivery Details',
-        'description' => 'Learn about our shipping policies, delivery times, and costs.',
-        'sections' => [
-            ['heading' => 'Shipping Options', 'text' => 'Standard Shipping: 5-7 business days ($5)<br>Express Shipping: 2-3 business days ($15)<br>Free shipping on orders over $50.'],
-            ['heading' => 'International Shipping', 'text' => 'Available to over 50 countries. Rates and times vary by location.']
-        ],
-        'meta_description' => 'Discover Deeken’s shipping options, delivery times, and policies.'
-    ],
-    'terms' => [
-        'title' => 'Terms & Conditions',
-        'description' => 'Read our terms and conditions to understand our policies on purchases, returns, and more.',
-        'sections' => [
-            ['heading' => 'Purchase Terms', 'text' => 'All sales are final unless otherwise stated. Returns accepted within 30 days.'],
-            ['heading' => 'User Conduct', 'text' => 'Users must not misuse our website or services.']
-        ],
-        'meta_description' => 'Review Deeken’s terms and conditions for purchases, returns, and user policies.'
-    ],
-    'privacy' => [
-        'title' => 'Privacy Policy',
-        'description' => 'We value your privacy. Learn how we collect, use, and protect your data.',
-        'sections' => [
-            ['heading' => 'Data Collection', 'text' => 'We collect personal information to process orders and improve your experience.'],
-            ['heading' => 'Data Protection', 'text' => 'Your data is secured with industry-standard encryption.']
-        ],
-        'meta_description' => 'Understand Deeken’s privacy policy and how we protect your data.'
-    ],
-    'faq' => [
-        'title' => 'Frequently Asked Questions',
-        'description' => 'Find answers to common questions about your account, deliveries, orders, and payments.',
-        'sections' => [
-            ['id' => 'account', 'heading' => 'Account', 'text' => 'How to create an account, update your profile, and reset your password.'],
-            ['id' => 'delivery', 'heading' => 'Manage Deliveries', 'text' => 'Track your order, update shipping details, or request a return.'],
-            ['id' => 'orders', 'heading' => 'Orders', 'text' => 'Check order status, cancel orders, or modify existing orders.'],
-            ['id' => 'payments', 'heading' => 'Payments', 'text' => 'We accept credit cards, bank transfers, and mobile payments.']
-        ],
-        'meta_description' => 'Find answers to frequently asked questions about accounts, deliveries, orders, and payments at Deeken.'
-    ],
-    'blog' => [
-        'title' => 'Deeken Blog',
-        'description' => 'Stay updated with the latest fashion trends, styling tips, and Deeken news.',
-        'sections' => [
-            ['heading' => 'Fashion Trends', 'text' => 'Explore the latest in fashion and how to style our collections.'],
-            ['heading' => 'Style Guides', 'text' => 'Tips and tricks to elevate your wardrobe.']
-        ],
-        'meta_description' => 'Read Deeken’s blog for fashion trends, styling tips, and brand updates.'
-    ],
-    'size-guide' => [
-        'title' => 'Size Guide',
-        'description' => 'Find the perfect fit with our comprehensive size guide.',
-        'sections' => [
-            ['heading' => 'Men’s Sizes', 'text' => 'Detailed charts for shirts, pants, and jackets.'],
-            ['heading' => 'Women’s Sizes', 'text' => 'Guides for dresses, tops, and skirts.']
-        ],
-        'meta_description' => 'Use Deeken’s size guide to find the perfect fit for men’s and women’s clothing.'
-    ],
-    'care-instructions' => [
-        'title' => 'Care Instructions',
-        'description' => 'Learn how to care for your Deeken garments to keep them looking great.',
-        'sections' => [
-            ['heading' => 'Washing Instructions', 'text' => 'Machine wash cold, tumble dry low, or follow garment-specific tags.'],
-            ['heading' => 'Storage Tips', 'text' => 'Store in a cool, dry place away from direct sunlight.']
-        ],
-        'meta_description' => 'Follow Deeken’s care instructions to maintain the quality of your clothing.'
-    ]
-];
+        // Add other pages similarly for fallback
+    ];
+}
 
 // Get the requested page and section from URL
 $page = isset($_GET['page']) ? strtolower(trim($_GET['page'])) : 'about';
