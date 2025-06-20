@@ -1022,66 +1022,62 @@ function displayStars($rating) {
     </section>
 
     <!-- Footer -->
-    <footer class="footer">
-        <div class="footer-content">
-            <div class="footer-brand">
-                <h3>DEEKEN</h3>
-                <p>We have clothes that suits your style and which you're proud to wear. From women to men.</p>
-                <div class="social-icons">
-                    <div class="social-icon">f</div>
-                    <div class="social-icon">t</div>
-                    <div class="social-icon">in</div>
-                    <div class="social-icon">ig</div>
-                </div>
-            </div>
-
-            <div class="footer-column">
-                <h4>Company</h4>
-                <ul>
-                    <li><a href="about.php">About</a></li>
-                    <li><a href="contact.php">Contact</a></li>
-                    <li><a href="careers.php">Careers</a></li>
-                </ul>
-            </div>
-
-            <div class="footer-column">
-                <h4>Help</h4>
-                <ul>
-                    <li><a href="support.php">Customer Support</a></li>
-                    <li><a href="shipping.php">Delivery Details</a></li>
-                    <li><a href="terms.php">Terms & Conditions</a></li>
-                    <li><a href="privacy.php">Privacy Policy</a></li>
-                </ul>
-            </div>
-
-            <div class="footer-column">
-                <h4>FAQ</h4>
-                <ul>
-                    <li><a href="faq.php#account">Account</a></li>
-                    <li><a href="faq.php#delivery">Manage Deliveries</a></li>
-                    <li><a href="faq.php#orders">Orders</a></li>
-                    <li><a href="faq.php#payments">Payments</a></li>
-                </ul>
-            </div>
-
-            <div class="footer-column">
-                <h4>Resources</h4>
-                <ul>
-                    <li><a href="blog.php">Blog</a></li>
-                    <li><a href="size-guide.php">Size Guide</a></li>
-                    <li><a href="care-instructions.php">Care Instructions</a></li>
-                </ul>
+   <footer class="footer">
+    <div class="footer-content">
+        <div class="footer-brand">
+            <h3>DEEKEN</h3>
+            <p>We have clothes that suits your style and which you're proud to wear. From women to men.</p>
+            <div class="social-icons">
+                <div class="social-icon">f</div>
+                <div class="social-icon">t</div>
+                <div class="social-icon">in</div>
+                <div class="social-icon">ig</div>
             </div>
         </div>
-
-        <div class="footer-bottom">
-            <p>Deeken © 2025, All Rights Reserved</p>
-            <div class="payment-icons">
-                <div class="payment-icon">💳</div>
-                <div class="payment-icon">🏦</div>
-                <div class="payment-icon">📱</div>
-            </div>
+        <div class="footer-column">
+            <h4>Company</h4>
+            <ul>
+                <li><a href="unified.php?page=about">About</a></li>
+                <li><a href="unified.php?page=contact">Contact</a></li>
+                <li><a href="unified.php?page=careers">Careers</a></li>
+            </ul>
         </div>
+        <div class="footer-column">
+            <h4>Help</h4>
+            <ul>
+                <li><a href="unified.php?page=support">Customer Support</a></li>
+                <li><a href="unified.php?page=shipping">Delivery Details</a></li>
+                <li><a href="unified.php?page=terms">Terms & Conditions</a></li>
+                <li><a href="unified.php?page=privacy">Privacy Policy</a></li>
+            </ul>
+        </div>
+        <div class="footer-column">
+            <h4>FAQ</h4>
+            <ul>
+                <li><a href="unified.php?page=faq&section=account">Account</a></li>
+                <li><a href="unified.php?page=faq&section=delivery">Manage Deliveries</a></li>
+                <li><a href="unified.php?page=faq&section=orders">Orders</a></li>
+                <li><a href="unified.php?page=faq&section=payments">Payments</a></li>
+            </ul>
+        </div>
+        <div class="footer-column">
+            <h4>Resources</h4>
+            <ul>
+                <li><a href="unified.php?page=blog">Blog</a></li>
+                <li><a href="unified.php?page=size-guide">Size Guide</a></li>
+                <li><a href="unified.php?page=care-instructions">Care Instructions</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        <p>Deeken © 2025, All Rights Reserved</p>
+        <div class="payment-icons">
+            <div class="payment-icon">💳</div>
+            <div class="payment-icon">🏦</div>
+            <div class="payment-icon">📱</div>
+        </div>
+    </div>
+</footer>
 
     <script>
         const isLoggedIn = <?php echo $user ? 'true' : 'false'; ?>;

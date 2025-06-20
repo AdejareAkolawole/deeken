@@ -1,11 +1,12 @@
 <?php
-// ----- INITIALIZATION -----
 include 'config.php';
 
-// Enable error reporting for debugging (remove in production)
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+// Enable error logging but disable display
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
+ini_set('log_errors', 1);
+ini_set('error_log', 'logs/error.log');
 
 // Get current user
 $user = getCurrentUser();
@@ -13,844 +14,10 @@ $user = getCurrentUser();
 // Require admin access
 requireAdmin();
 
-// Function to create a notification
-function createNotification($conn, $user_id, $message, $type, $order_id) {
-    try {
-        $stmt = $conn->prepare("
-            INSERT INTO notifications (user_id, message, type, order_id, is_read)
-            VALUES (?, ?, ?, ?, 0)
-        ");
-        $stmt->bind_param("issi", $user_id, $message, $type, $order_id);
-        $stmt->execute();
-        $stmt->close();
-        return true;
-    } catch (Exception $e) {
-        error_log("Create notification error: " . $e->getMessage());
-        return false;
-    }
-}
-
-// ----- CART COUNT -----
+// Fetch cart count (assuming getCartCount exists in config.php)
 $cart_count = getCartCount($conn, $user);
 
-// ----- AJAX HANDLING -----
-
-// Fetch Hero Section
-if (isset($_POST['action']) && $_POST['action'] === 'fetch_hero_section') {
-    $hero = [];
-    try {
-        $result = $conn->query("SELECT id, title, description, button_text, main_image, sparkle_image_1, sparkle_image_2 FROM hero_section LIMIT 1");
-        $hero = $result->fetch_assoc();
-    } catch (Exception $e) {
-        error_log("Fetch hero section error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($hero ?: []);
-    exit;
-}
-
-// Update Hero Section
-if (isset($_POST['action']) && $_POST['action'] === 'update_hero_section') {
-    $title = trim($_POST['title']);
-    $description = trim($_POST['description']);
-    $button_text = trim($_POST['button_text']);
-    $existing_main_image = trim($_POST['existing_main_image']);
-    $existing_sparkle_1 = trim($_POST['existing_sparkle_1']);
-    $existing_sparkle_2 = trim($_POST['existing_sparkle_2']);
-    $response = ['success' => false, 'message' => ''];
-
-    if (empty($title) || empty($description) || empty($button_text)) {
-        $response['message'] = 'All text fields are required.';
-    } else {
-        $main_image = $existing_main_image;
-        $sparkle_image_1 = $existing_sparkle_1;
-        $sparkle_image_2 = $existing_sparkle_2;
-        $target_dir = "Uploads/hero/";
-        if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
-
-        // Handle main image upload
-        if (!empty($_FILES['main_image']['name']) && $_FILES['main_image']['error'] === UPLOAD_ERR_OK) {
-            $imageFileType = strtolower(pathinfo($_FILES['main_image']['name'], PATHINFO_EXTENSION));
-            $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
-            if (!in_array($imageFileType, $allowed_types)) {
-                $response['message'] = 'Only JPG, JPEG, PNG, and GIF files are allowed for main image.';
-            } elseif ($_FILES['main_image']['size'] > 5000000) {
-                $response['message'] = 'Main image size exceeds 5MB limit.';
-            } else {
-                $unique_name = uniqid('hero_main_') . '.' . $imageFileType;
-                $target_file = $target_dir . $unique_name;
-                if (move_uploaded_file($_FILES['main_image']['tmp_name'], $target_file)) {
-                    if ($main_image && $main_image !== 'images/hero-couple.png' && file_exists($main_image)) {
-                        unlink($main_image);
-                    }
-                    $main_image = $target_file;
-                } else {
-                    $response['message'] = 'Failed to upload main image.';
-                }
-            }
-        }
-
-        // Handle sparkle image 1 upload
-        if (!$response['message'] && !empty($_FILES['sparkle_image_1']['name']) && $_FILES['sparkle_image_1']['error'] === UPLOAD_ERR_OK) {
-            $imageFileType = strtolower(pathinfo($_FILES['sparkle_image_1']['name'], PATHINFO_EXTENSION));
-            $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
-            if (!in_array($imageFileType, $allowed_types)) {
-                $response['message'] = 'Only JPG, JPEG, PNG, and GIF files are allowed for sparkle image 1.';
-            } elseif ($_FILES['sparkle_image_1']['size'] > 5000000) {
-                $response['message'] = 'Sparkle image 1 size exceeds 5MB limit.';
-            } else {
-                $unique_name = uniqid('hero_sparkle1_') . '.' . $imageFileType;
-                $target_file = $target_dir . $unique_name;
-                if (move_uploaded_file($_FILES['sparkle_image_1']['tmp_name'], $target_file)) {
-                    if ($sparkle_image_1 && $sparkle_image_1 !== 'images/sparkle-1.png' && file_exists($sparkle_image_1)) {
-                        unlink($sparkle_image_1);
-                    }
-                    $sparkle_image_1 = $target_file;
-                } else {
-                    $response['message'] = 'Failed to upload sparkle image 1.';
-                }
-            }
-        }
-
-        // Handle sparkle image 2 upload
-        if (!$response['message'] && !empty($_FILES['sparkle_image_2']['name']) && $_FILES['sparkle_image_2']['error'] === UPLOAD_ERR_OK) {
-            $imageFileType = strtolower(pathinfo($_FILES['sparkle_image_2']['name'], PATHINFO_EXTENSION));
-            $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
-            if (!in_array($imageFileType, $allowed_types)) {
-                $response['message'] = 'Only JPG, JPEG, PNG, and GIF files are allowed for sparkle image 2.';
-            } elseif ($_FILES['sparkle_image_2']['size'] > 5000000) {
-                $response['message'] = 'Sparkle image 2 size exceeds 5MB limit.';
-            } else {
-                $unique_name = uniqid('hero_sparkle2_') . '.' . $imageFileType;
-                $target_file = $target_dir . $unique_name;
-                if (move_uploaded_file($_FILES['sparkle_image_2']['tmp_name'], $target_file)) {
-                    if ($sparkle_image_2 && $sparkle_image_2 !== 'images/sparkle-2.png' && file_exists($sparkle_image_2)) {
-                        unlink($sparkle_image_2);
-                    }
-                    $sparkle_image_2 = $target_file;
-                } else {
-                    $response['message'] = 'Failed to upload sparkle image 2.';
-                }
-            }
-        }
-
-        if (!$response['message']) {
-            $conn->begin_transaction();
-            try {
-                $stmt = $conn->prepare("
-                    UPDATE hero_section 
-                    SET title = ?, description = ?, button_text = ?, main_image = ?, sparkle_image_1 = ?, sparkle_image_2 = ?
-                    WHERE id = 1
-                ");
-                $stmt->bind_param("ssssss", $title, $description, $button_text, $main_image, $sparkle_image_1, $sparkle_image_2);
-                $stmt->execute();
-                $stmt->close();
-                $conn->commit();
-                $response['success'] = true;
-                $response['message'] = 'Hero section updated successfully.';
-            } catch (Exception $e) {
-                $conn->rollback();
-                $response['message'] = 'Failed to update hero section: ' . $e->getMessage();
-                error_log("Hero section update error: " . $e->getMessage());
-            }
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Search Products
-if (isset($_POST['action']) && $_POST['action'] === 'search_products') {
-    $search = isset($_POST['search']) ? trim($_POST['search']) : '';
-    $products = [];
-    try {
-        $query = "
-            SELECT p.id, p.name, p.sku, p.price, p.description, i.stock_quantity, p.image, c.name AS category, ma.attribute AS misc_attribute, p.featured
-            FROM products p
-            LEFT JOIN inventory i ON p.id = i.product_id
-            LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN miscellaneous_attributes ma ON p.id = ma.product_id
-            WHERE p.name LIKE ? OR c.name LIKE ?
-        ";
-        $stmt = $conn->prepare($query);
-        $search_param = "%$search%";
-        $stmt->bind_param("ss", $search_param, $search_param);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        while ($row = $result->fetch_assoc()) {
-            $products[] = $row;
-        }
-        $stmt->close();
-    } catch (Exception $e) {
-        error_log("Search products error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($products);
-    exit;
-}
-
-// Fetch Orders
-if (isset($_POST['action']) && $_POST['action'] === 'fetch_orders') {
-    $status = isset($_POST['status']) && $_POST['status'] !== 'all' ? $_POST['status'] : null;
-    $orders = [];
-    try {
-        $query = "
-            SELECT o.id, o.user_id, u.full_name, o.total, o.delivery_fee, o.status, o.created_at, o.address_id
-            FROM orders o
-            JOIN users u ON o.user_id = u.id
-        ";
-        if ($status) {
-            $query .= " WHERE o.status = ?";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("s", $status);
-        } else {
-            $query .= " ORDER BY FIELD(o.status, 'processing', 'pending', 'shipped', 'delivered', 'cancelled')";
-            $stmt = $conn->prepare($query);
-        }
-        $stmt->execute();
-        $result = $stmt->get_result();
-        while ($row = $result->fetch_assoc()) {
-            $orders[] = $row;
-        }
-        $stmt->close();
-    } catch (Exception $e) {
-        error_log("Fetch orders error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($orders);
-    exit;
-}
-
-// Fetch Order Details
-if (isset($_POST['action']) && $_POST['action'] === 'fetch_order_details') {
-    $order_id = (int)$_POST['order_id'];
-    $order = [];
-    try {
-        // Fetch order and customer info
-        $stmt = $conn->prepare("
-            SELECT o.id, o.user_id, u.full_name, u.email, u.phone, u.address, o.total, o.delivery_fee, o.status, o.created_at
-            FROM orders o
-            JOIN users u ON o.user_id = u.id
-            WHERE o.id = ?
-        ");
-        $stmt->bind_param("i", $order_id);
-        $stmt->execute();
-        $order['info'] = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        // Fetch order items
-        $stmt = $conn->prepare("
-            SELECT oi.quantity, oi.price, p.name, p.sku
-            FROM order_items oi
-            JOIN products p ON oi.product_id = p.id
-            WHERE oi.order_id = ?
-        ");
-        $stmt->bind_param("i", $order_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $order['items'] = [];
-        while ($row = $result->fetch_assoc()) {
-            $order['items'][] = $row;
-        }
-        $stmt->close();
-    } catch (Exception $e) {
-        error_log("Fetch order details error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($order);
-    exit;
-}
-
-// Fetch Categories
-if (isset($_POST['action']) && $_POST['action'] === 'fetch_categories') {
-    $categories = [];
-    try {
-        $result = $conn->query("SELECT id, name, description, created_at FROM categories");
-        while ($row = $result->fetch_assoc()) {
-            $categories[] = $row;
-        }
-    } catch (Exception $e) {
-        error_log("Fetch categories error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($categories);
-    exit;
-}
-
-// Fetch Users
-if (isset($_POST['action']) && $_POST['action'] === 'fetch_users') {
-    $users = [];
-    try {
-        $result = $conn->query("SELECT id, email, full_name, phone, is_admin, created_at FROM users");
-        while ($row = $result->fetch_assoc()) {
-            $users[] = $row;
-        }
-    } catch (Exception $e) {
-        error_log("Fetch users error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($users);
-    exit;
-}
-
-// Fetch Reviews
-if (isset($_POST['action']) && $_POST['action'] === 'fetch_reviews') {
-    $reviews = [];
-    try {
-        $result = $conn->query("
-            SELECT r.id, r.product_id, p.name AS product_name, r.user_id, u.full_name, r.rating, r.review_text, r.created_at
-            FROM reviews r
-            JOIN products p ON r.product_id = p.id
-            JOIN users u ON r.user_id = u.id
-        ");
-        while ($row = $result->fetch_assoc()) {
-            $reviews[] = $row;
-        }
-    } catch (Exception $e) {
-        error_log("Fetch reviews error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($reviews);
-    exit;
-}
-
-// Add Product
-if (isset($_POST['action']) && $_POST['action'] === 'add_product') {
-    $product_name = trim($_POST['name']);
-    $price = (float)$_POST['price'];
-    $stock_quantity = (int)$_POST['stock_quantity'];
-    $category_id = (int)$_POST['category_id'];
-    $misc_attribute = trim($_POST['misc_attribute']);
-    $featured = isset($_POST['featured']) ? 1 : 0;
-    $description = trim($_POST['description']);
-    $image_url = 'https://via.placeholder.com/150';
-    $response = ['success' => false, 'message' => ''];
-
-    if (empty($product_name)) {
-        $response['message'] = 'Product name is required.';
-    } elseif ($price <= 0) {
-        $response['message'] = 'Price must be greater than 0.';
-    } elseif ($category_id <= 0) {
-        $response['message'] = 'Please select a valid category.';
-    } else {
-        $valid_attributes = ['new_arrival', 'featured', 'trending', ''];
-        if (!in_array($misc_attribute, $valid_attributes)) {
-            $response['message'] = 'Invalid miscellaneous attribute.';
-        } else {
-            if (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $target_dir = "Uploads/";
-                if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
-                if (!is_writable($target_dir)) {
-                    $response['message'] = 'Upload directory is not writable.';
-                } else {
-                    $imageFileType = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
-                    $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
-                    if (!in_array($imageFileType, $allowed_types)) {
-                        $response['message'] = 'Only JPG, JPEG, PNG, and GIF files are allowed.';
-                    } elseif ($_FILES['image']['size'] > 5000000) {
-                        $response['message'] = 'Image size exceeds 5MB limit.';
-                    } else {
-                        $unique_name = uniqid('img_') . '.' . $imageFileType;
-                        $target_file = $target_dir . $unique_name;
-                        if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                            $image_url = $target_file;
-                        } else {
-                            $response['message'] = 'Failed to upload image.';
-                        }
-                    }
-                }
-            }
-            if (!$response['message']) {
-                $conn->begin_transaction();
-                try {
-                    $sku = "PROD" . str_pad(mt_rand(1, 99999), 5, '0', STR_PAD_LEFT);
-                    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM products WHERE sku = ?");
-                    $stmt->bind_param("s", $sku);
-                    $stmt->execute();
-                    if ($stmt->get_result()->fetch_assoc()['count'] > 0) {
-                        throw new Exception("Generated SKU already exists.");
-                    }
-                    $stmt->close();
-
-                    $stmt = $conn->prepare("
-                        INSERT INTO products (category_id, name, sku, price, image, description, featured, rating)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 0.0)
-                    ");
-                    $description = $description ?: 'No description provided.';
-                    $stmt->bind_param("issdssi", $category_id, $product_name, $sku, $price, $image_url, $description, $featured);
-                    $stmt->execute();
-                    $product_id = $conn->insert_id;
-                    $stmt->close();
-
-                    $inv_stmt = $conn->prepare("INSERT INTO inventory (product_id, stock_quantity) VALUES (?, ?)");
-                    $inv_stmt->bind_param("ii", $product_id, $stock_quantity);
-                    $inv_stmt->execute();
-                    $inv_stmt->close();
-
-                    if ($misc_attribute) {
-                        $attr_stmt = $conn->prepare("INSERT INTO miscellaneous_attributes (product_id, attribute) VALUES (?, ?)");
-                        $attr_stmt->bind_param("is", $product_id, $misc_attribute);
-                        $attr_stmt->execute();
-                        $attr_stmt->close();
-                    }
-
-                    $conn->commit();
-                    $response['success'] = true;
-                    $response['message'] = 'Product added successfully.';
-                } catch (Exception $e) {
-                    $conn->rollback();
-                    $response['message'] = 'Failed to add product: ' . $e->getMessage();
-                    error_log("Product addition error: " . $e->getMessage());
-                }
-            }
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Edit Product
-if (isset($_POST['action']) && $_POST['action'] === 'edit_product') {
-    $product_id = (int)$_POST['product_id'];
-    $product_name = trim($_POST['name']);
-    $price = (float)$_POST['price'];
-    $stock_quantity = (int)$_POST['stock_quantity'];
-    $category_id = (int)$_POST['category_id'];
-    $misc_attribute = trim($_POST['misc_attribute']);
-    $featured = isset($_POST['featured']) ? 1 : 0;
-    $description = trim($_POST['description']);
-    $image_url = $_POST['existing_image'];
-    $response = ['success' => false, 'message' => ''];
-
-    if (empty($product_name)) {
-        $response['message'] = 'Product name is required.';
-    } elseif ($price <= 0) {
-        $response['message'] = 'Price must be greater than 0.';
-    } elseif ($category_id <= 0) {
-        $response['message'] = 'Please select a valid category.';
-    } else {
-        $valid_attributes = ['new_arrival', 'featured', 'trending', ''];
-        if (!in_array($misc_attribute, $valid_attributes)) {
-            $response['message'] = 'Invalid miscellaneous attribute.';
-        } else {
-            if (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $target_dir = "Uploads/";
-                if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
-                if (!is_writable($target_dir)) {
-                    $response['message'] = 'Upload directory is not writable.';
-                } else {
-                    $imageFileType = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
-                    $allowed_types = ['jpg', 'jpeg', 'png', 'gif'];
-                    if (!in_array($imageFileType, $allowed_types)) {
-                        $response['message'] = 'Only JPG, JPEG, PNG, and GIF files are allowed.';
-                    } elseif ($_FILES['image']['size'] > 5000000) {
-                        $response['message'] = 'Image size exceeds 5MB limit.';
-                    } else {
-                        $unique_name = uniqid('img_') . '.' . $imageFileType;
-                        $target_file = $target_dir . $unique_name;
-                        if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
-                            if ($image_url !== 'https://via.placeholder.com/150' && file_exists($image_url)) {
-                                unlink($image_url);
-                            }
-                            $image_url = $target_file;
-                        } else {
-                            $response['message'] = 'Failed to upload new image.';
-                        }
-                    }
-                }
-            }
-            if (!$response['message']) {
-                $conn->begin_transaction();
-                try {
-                    $stmt = $conn->prepare("
-                        UPDATE products 
-                        SET category_id = ?, name = ?, price = ?, image = ?, description = ?, featured = ?
-                        WHERE id = ?
-                    ");
-                    $description = $description ?: 'No description provided.';
-                    $stmt->bind_param("isdssii", $category_id, $product_name, $price, $image_url, $description, $featured, $product_id);
-                    $stmt->execute();
-                    $stmt->close();
-
-                    $inv_stmt = $conn->prepare("UPDATE inventory SET stock_quantity = ? WHERE product_id = ?");
-                    $inv_stmt->bind_param("ii", $stock_quantity, $product_id);
-                    $inv_stmt->execute();
-                    $inv_stmt->close();
-
-                    $attr_stmt = $conn->prepare("DELETE FROM miscellaneous_attributes WHERE product_id = ?");
-                    $attr_stmt->bind_param("i", $product_id);
-                    $attr_stmt->execute();
-                    $attr_stmt->close();
-
-                    if ($misc_attribute) {
-                        $attr_stmt = $conn->prepare("INSERT INTO miscellaneous_attributes (product_id, attribute) VALUES (?, ?)");
-                        $attr_stmt->bind_param("is", $product_id, $misc_attribute);
-                        $attr_stmt->execute();
-                        $attr_stmt->close();
-                    }
-
-                    $conn->commit();
-                    $response['success'] = true;
-                    $response['message'] = 'Product updated successfully.';
-                } catch (Exception $e) {
-                    $conn->rollback();
-                    $response['message'] = 'Failed to update product: ' . $e->getMessage();
-                    error_log("Product update error: " . $e->getMessage());
-                }
-            }
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Delete Product
-if (isset($_POST['action']) && $_POST['action'] === 'delete_product') {
-    $product_id = (int)$_POST['product_id'];
-    $response = ['success' => false, 'message' => ''];
-    $conn->begin_transaction();
-    try {
-        $stmt = $conn->prepare("SELECT image FROM products WHERE id = ?");
-        $stmt->bind_param("i", $product_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($row = $result->fetch_assoc()) {
-            $image_path = $row['image'];
-            if ($image_path !== 'https://via.placeholder.com/150' && file_exists($image_path)) {
-                unlink($image_path);
-            }
-        }
-        $stmt->close();
-
-        $tables = ['cart', 'order_items', 'reviews', 'inventory', 'miscellaneous_attributes'];
-        foreach ($tables as $table) {
-            $stmt = $conn->prepare("DELETE FROM $table WHERE product_id = ?");
-            $stmt->bind_param("i", $product_id);
-            $stmt->execute();
-            $stmt->close();
-        }
-
-        $stmt = $conn->prepare("DELETE FROM products WHERE id = ?");
-        $stmt->bind_param("i", $product_id);
-        $stmt->execute();
-        $stmt->close();
-
-        $conn->commit();
-        $response['success'] = true;
-        $response['message'] = 'Product deleted successfully.';
-    } catch (Exception $e) {
-        $conn->rollback();
-        $response['message'] = 'Failed to delete product: ' . $e->getMessage();
-        error_log("Product deletion error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Add Category
-if (isset($_POST['action']) && $_POST['action'] === 'add_category') {
-    $category_name = trim($_POST['name']);
-    $description = trim($_POST['description']);
-    $response = ['success' => false, 'message' => ''];
-    if (empty($category_name)) {
-        $response['message'] = 'Category name is required.';
-    } else {
-        try {
-            $stmt = $conn->prepare("INSERT INTO categories (name, description) VALUES (?, ?)");
-            $stmt->bind_param("ss", $category_name, $description);
-            $stmt->execute();
-            $stmt->close();
-            $response['success'] = true;
-            $response['message'] = 'Category added successfully.';
-        } catch (Exception $e) {
-            $response['message'] = 'Failed to add category: ' . $e->getMessage();
-            error_log("Category creation error: " . $e->getMessage());
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Edit Category
-if (isset($_POST['action']) && $_POST['action'] === 'edit_category') {
-    $category_id = (int)$_POST['category_id'];
-    $category_name = trim($_POST['name']);
-    $description = trim($_POST['description']);
-    $response = ['success' => false, 'message' => ''];
-    if (empty($category_name)) {
-        $response['message'] = 'Category name is required.';
-    } else {
-        try {
-            $stmt = $conn->prepare("UPDATE categories SET name = ?, description = ? WHERE id = ?");
-            $stmt->bind_param("ssi", $category_name, $description, $category_id);
-            $stmt->execute();
-            $stmt->close();
-            $response['success'] = true;
-            $response['message'] = 'Category updated successfully.';
-        } catch (Exception $e) {
-            $response['message'] = 'Failed to update category: ' . $e->getMessage();
-            error_log("Category update error: " . $e->getMessage());
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Delete Category
-if (isset($_POST['action']) && $_POST['action'] === 'delete_category') {
-    $category_id = (int)$_POST['category_id'];
-    $response = ['success' => false, 'message' => ''];
-    try {
-        $stmt = $conn->prepare("SELECT COUNT(*) as count FROM products WHERE category_id = ?");
-        $stmt->bind_param("i", $category_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result->fetch_assoc()['count'] > 0) {
-            $response['message'] = 'Cannot delete category because it has associated products.';
-        } else {
-            $stmt = $conn->prepare("DELETE FROM categories WHERE id = ?");
-            $stmt->bind_param("i", $category_id);
-            $stmt->execute();
-            $stmt->close();
-            $response['success'] = true;
-            $response['message'] = 'Category deleted successfully.';
-        }
-    } catch (Exception $e) {
-        $response['message'] = 'Failed to delete category: ' . $e->getMessage();
-        error_log("Category deletion error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Add User
-if (isset($_POST['action']) && $_POST['action'] === 'add_user') {
-    $email = trim($_POST['email']);
-    $full_name = trim($_POST['full_name']);
-    $phone = trim($_POST['phone']);
-    $is_admin = isset($_POST['is_admin']) ? 1 : 0;
-    $password = trim($_POST['password']);
-    $response = ['success' => false, 'message' => ''];
-    if (empty($email) || empty($full_name) || empty($phone) || empty($password)) {
-        $response['message'] = 'All fields are required.';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $response['message'] = 'Invalid email format.';
-    } elseif (strlen($password) < 8) {
-        $response['message'] = 'Password must be at least 8 characters.';
-    } else {
-        try {
-            $stmt = $conn->prepare("SELECT COUNT(*) as count FROM users WHERE email = ?");
-            $stmt->bind_param("s", $email);
-            $stmt->execute();
-            if ($stmt->get_result()->fetch_assoc()['count'] > 0) {
-                $response['message'] = 'Email already exists.';
-            } else {
-                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $conn->prepare("INSERT INTO users (email, password, full_name, phone, is_admin, address) VALUES (?, ?, ?, ?, ?, 'No address provided')");
-                $stmt->bind_param("ssssi", $email, $hashed_password, $full_name, $phone, $is_admin);
-                $stmt->execute();
-                $stmt->close();
-                $response['success'] = true;
-                $response['message'] = 'User added successfully.';
-            }
-        } catch (Exception $e) {
-            $response['message'] = 'Failed to add user: ' . $e->getMessage();
-            error_log("User addition error: " . $e->getMessage());
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Edit User
-if (isset($_POST['action']) && $_POST['action'] === 'edit_user') {
-    $user_id = (int)$_POST['user_id'];
-    $email = trim($_POST['email']);
-    $full_name = trim($_POST['full_name']);
-    $phone = trim($_POST['phone']);
-    $is_admin = isset($_POST['is_admin']) ? 1 : 0;
-    $response = ['success' => false, 'message' => ''];
-    if (empty($email) || empty($full_name) || empty($phone)) {
-        $response['message'] = 'All fields are required.';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $response['message'] = 'Invalid email format.';
-    } else {
-        try {
-            $stmt = $conn->prepare("UPDATE users SET email = ?, full_name = ?, phone = ?, is_admin = ? WHERE id = ?");
-            $stmt->bind_param("sssii", $email, $full_name, $phone, $is_admin, $user_id);
-            $stmt->execute();
-            $stmt->close();
-            $response['success'] = true;
-            $response['message'] = 'User updated successfully.';
-        } catch (Exception $e) {
-            $response['message'] = 'Failed to update user: ' . $e->getMessage();
-            error_log("User update error: " . $e->getMessage());
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Delete User
-if (isset($_POST['action']) && $_POST['action'] === 'delete_user') {
-    $user_id = (int)$_POST['user_id'];
-    $response = ['success' => false, 'message' => ''];
-    if ($user_id === $user['id']) {
-        $response['message'] = 'Cannot delete the current user.';
-    } else {
-        try {
-            $stmt = $conn->prepare("SELECT COUNT(*) as count FROM orders WHERE user_id = ?");
-            $stmt->bind_param("i", $user_id);
-            $stmt->execute();
-            if ($stmt->get_result()->fetch_assoc()['count'] > 0) {
-                $response['message'] = 'Cannot delete user because they have associated orders.';
-            } else {
-                $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
-                $stmt->bind_param("i", $user_id);
-                $stmt->execute();
-                $stmt->close();
-                $response['success'] = true;
-                $response['message'] = 'User deleted successfully.';
-            }
-        } catch (Exception $e) {
-            $response['message'] = 'Failed to delete user: ' . $e->getMessage();
-            error_log("User deletion error: " . $e->getMessage());
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Ship Order
-if (isset($_POST['action']) && $_POST['action'] === 'ship_order') {
-    $order_id = (int)$_POST['order_id'];
-    $estimated_delivery_days = isset($_POST['estimated_delivery_days']) ? (int)$_POST['estimated_delivery_days'] : 0;
-    $response = ['success' => false, 'message' => ''];
-
-    // Validate inputs
-    if ($order_id <= 0) {
-        $response['message'] = 'Invalid order ID.';
-    } elseif ($estimated_delivery_days <= 0) {
-        $response['message'] = 'Estimated delivery days must be a positive number.';
-    } else {
-        $conn->begin_transaction();
-        try {
-            // Check if order exists and is in 'processing' status
-            $stmt = $conn->prepare("SELECT user_id, status FROM orders WHERE id = ?");
-            $stmt->bind_param("i", $order_id);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            if (!$order = $result->fetch_assoc()) {
-                throw new Exception("Order not found.");
-            }
-            if ($order['status'] !== 'processing') {
-                throw new Exception("Order is not in a shippable state.");
-            }
-            $stmt->close();
-
-            // Update order status and delivery days
-            $stmt = $conn->prepare("
-                UPDATE orders 
-                SET status = 'shipped', estimated_delivery_days = ?
-                WHERE id = ?
-            ");
-            $stmt->bind_param("ii", $estimated_delivery_days, $order_id);
-            if (!$stmt->execute()) {
-                throw new Exception("Failed to update order status.");
-            }
-            $stmt->close();
-
-            // Create notification
-            $message = "Order Received and Ready to Ship. Package will be delivered in $estimated_delivery_days days.";
-            if (!createNotification($conn, $order['user_id'], $message, 'shipped', $order_id)) {
-                throw new Exception("Failed to create notification.");
-            }
-
-            $conn->commit();
-            $response['success'] = true;
-            $response['message'] = 'Order marked as shipped and notification sent.';
-        } catch (Exception $e) {
-            $conn->rollback();
-            $response['message'] = 'Failed to ship order: ' . $e->getMessage();
-            error_log("Order ship error: " . $e->getMessage());
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Delete Review
-if (isset($_POST['action']) && $_POST['action'] === 'delete_review') {
-    $review_id = (int)$_POST['review_id'];
-    $response = ['success' => false, 'message' => ''];
-    try {
-        $stmt = $conn->prepare("DELETE FROM reviews WHERE id = ?");
-        $stmt->bind_param("i", $review_id);
-        $stmt->execute();
-        $stmt->close();
-        $response['success'] = true;
-        $response['message'] = 'Review deleted successfully.';
-    } catch (Exception $e) {
-        $response['message'] = 'Failed to delete review: ' . $e->getMessage();
-        error_log("Review deletion error: " . $e->getMessage());
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// Change Password
-if (isset($_POST['action']) && $_POST['action'] === 'change_password') {
-    $current_password = trim($_POST['current_password']);
-    $new_password = trim($_POST['new_password']);
-    $confirm_password = trim($_POST['confirm_password']);
-    $response = ['success' => false, 'message' => ''];
-    if (empty($current_password) || empty($new_password) || empty($confirm_password)) {
-        $response['message'] = 'All fields are required.';
-    } elseif ($new_password !== $confirm_password) {
-        $response['message'] = 'New password and confirmation do not match.';
-    } elseif (strlen($new_password) < 8) {
-        $response['message'] = 'New password must be at least 8 characters.';
-    } else {
-        try {
-            $stmt = $conn->prepare("SELECT password FROM users WHERE id = ?");
-            $stmt->bind_param("i", $user['id']);
-            $stmt->execute();
-            $stored_password = $stmt->get_result()->fetch_assoc()['password'];
-            $stmt->close();
-            if (password_verify($current_password, $stored_password)) {
-                $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-                $stmt = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
-                $stmt->bind_param("si", $hashed_password, $user['id']);
-                $stmt->execute();
-                $stmt->close();
-                $response['success'] = true;
-                $response['message'] = 'Password changed successfully.';
-            } else {
-                $response['message'] = 'Current password is incorrect.';
-            }
-        } catch (Exception $e) {
-            $response['message'] = 'Failed to change password: ' . $e->getMessage();
-            error_log("Password change error: " . $e->getMessage());
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-// ----- FETCH METRICS -----
+// Fetch metrics
 $total_users = $conn->query("SELECT COUNT(*) as count FROM users")->fetch_assoc()['count'] ?? 0;
 $total_products = $conn->query("SELECT COUNT(*) as count FROM products")->fetch_assoc()['count'] ?? 0;
 $total_orders = $conn->query("SELECT COUNT(*) as count FROM orders")->fetch_assoc()['count'] ?? 0;
@@ -858,8 +25,7 @@ $total_revenue = $conn->query("SELECT SUM(total) as sum FROM orders WHERE status
 $total_stock = $conn->query("SELECT SUM(stock_quantity) as sum FROM inventory")->fetch_assoc()['sum'] ?? 0;
 $pending_orders = $conn->query("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'")->fetch_assoc()['count'] ?? 0;
 
-// ----- FETCH DATA FOR TABLES -----
-
+// Fetch data for tables
 $hero_section = $conn->query("SELECT id, title, description, button_text, main_image, sparkle_image_1, sparkle_image_2 FROM hero_section LIMIT 1")->fetch_assoc() ?? [];
 
 $products = [];
@@ -1692,23 +858,29 @@ while ($row = $result->fetch_assoc()) {
                         <thead>
                             <tr>
                                 <th>Order ID</th>
-                                <th>Customer</th>
+                                                                <th>Customer</th>
                                 <th>Total</th>
                                 <th>Status</th>
                                 <th>Date</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="recentOrdersTable">
+                        <tbody>
                             <?php foreach (array_slice($orders, 0, 5) as $order): ?>
                                 <tr>
                                     <td>#<?php echo htmlspecialchars($order['id']); ?></td>
                                     <td><?php echo htmlspecialchars($order['full_name']); ?></td>
-                                    <td>$<?php echo number_format($order['total'], 2); ?></td>
-                                    <td><span class="status-badge status-<?php echo htmlspecialchars(strtolower($order['status'] === 'processing' ? 'pending' : $order['status'])); ?>"><?php echo htmlspecialchars($order['status'] === 'processing' ? 'Pending' : $order['status']); ?></span></td>
+                                    <td>$<?php echo number_format($order['total'] + $order['delivery_fee'], 2); ?></td>
+                                    <td>
+                                        <span class="status-badge status-<?php echo htmlspecialchars(strtolower($order['status'])); ?>">
+                                            <?php echo htmlspecialchars(ucfirst($order['status'])); ?>
+                                        </span>
+                                    </td>
                                     <td><?php echo htmlspecialchars(date('M d, Y', strtotime($order['created_at']))); ?></td>
                                     <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="viewOrder(<?php echo htmlspecialchars($order['id']); ?>)">View</button>
+                                        <button class="btn btn-primary btn-sm" onclick="viewOrder(<?php echo $order['id']; ?>)">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1721,83 +893,44 @@ while ($row = $result->fetch_assoc()) {
             <div class="tab-content" id="products">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Products Management</h3>
-                        <button class="btn btn-success" onclick="openModal('addProductModal')">
-                            <i class="fas fa-plus"></i> Add Product
-                        </button>
+                        <h3 class="table-title">Products</h3>
+                        <div class="table-actions">
+                            <input type="text" id="productSearch" class="form-input" placeholder="Search products..." oninput="searchProducts()">
+                            <button class="btn btn-primary" onclick="openAddProductModal()">Add Product</button>
+                        </div>
                     </div>
-                                        <table>
+                    <table id="productsTable">
                         <thead>
                             <tr>
                                 <th>ID</th>
+                                <th>Image</th>
                                 <th>Name</th>
-                                <th>SKU</th>
+                                <th>Category</th>
                                 <th>Price</th>
                                 <th>Stock</th>
-                                <th>Category</th>
                                 <th>Featured</th>
+                                <th>Misc Attribute</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="productsTable">
+                        <tbody>
                             <?php foreach ($products as $product): ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($product['id']); ?></td>
+                                    <td><img src="<?php echo htmlspecialchars($product['image']); ?>" alt="Product Image" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"></td>
                                     <td><?php echo htmlspecialchars($product['name']); ?></td>
-                                    <td><?php echo htmlspecialchars($product['sku']); ?></td>
+                                    <td><?php echo htmlspecialchars($product['category'] ?: 'N/A'); ?></td>
                                     <td>$<?php echo number_format($product['price'], 2); ?></td>
-                                    <td><?php echo htmlspecialchars($product['stock_quantity']); ?></td>
-                                    <td><?php echo htmlspecialchars($product['category']); ?></td>
-                                    <td><?php echo $product['featured'] ? 'Yes' : 'No'; ?></td>
+                                    <td><?php echo htmlspecialchars($product['stock_quantity'] ?: 0); ?></td>
+                                    <td><?php echo $product['featured'] ? '<i class="fas fa-check text-success"></i>' : ''; ?></td>
+                                    <td><?php echo htmlspecialchars($product['misc_attribute'] ?: 'None'); ?></td>
                                     <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editProduct(<?php echo htmlspecialchars($product['id']); ?>)">Edit</button>
-                                        <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteProduct(<?php echo htmlspecialchars($product['id']); ?>)">Delete</button>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Orders Tab -->
-            <div class="tab-content" id="orders">
-                <div class="table-container">
-                    <div class="table-header">
-                        <h3 class="table-title">Orders Management</h3>
-                        <select id="orderStatusFilter" onchange="fetchOrders()">
-                            <option value="all">All Statuses</option>
-                            <option value="pending">Pending</option>
-                            <option value="processing">Processing</option>
-                            <option value="shipped">Shipped</option>
-                            <option value="delivered">Delivered</option>
-                            <option value="cancelled">Cancelled</option>
-                        </select>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Order ID</th>
-                                <th>Customer</th>
-                                <th>Total</th>
-                                <th>Status</th>
-                                <th>Date</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ordersTable">
-                            <?php foreach ($orders as $order): ?>
-                                <tr>
-                                    <td>#<?php echo htmlspecialchars($order['id']); ?></td>
-                                    <td><?php echo htmlspecialchars($order['full_name']); ?></td>
-                                    <td>$<?php echo number_format($order['total'], 2); ?></td>
-                                    <td><span class="status-badge status-<?php echo htmlspecialchars(strtolower($order['status'])); ?>"><?php echo htmlspecialchars($order['status']); ?></span></td>
-                                    <td><?php echo htmlspecialchars(date('M d, Y', strtotime($order['created_at']))); ?></td>
-                                    <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="viewOrder(<?php echo htmlspecialchars($order['id']); ?>)">View</button>
-                                        <?php if ($order['status'] === 'processing'): ?>
-                                            <button class="btn btn-success" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="shipOrder(<?php echo htmlspecialchars($order['id']); ?>)">Ship</button>
-                                        <?php endif; ?>
+                                        <button class="btn btn-primary btn-sm" onclick="openEditProductModal(<?php echo htmlspecialchars(json_encode($product)); ?>)">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteProduct(<?php echo $product['id']; ?>)">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1810,12 +943,10 @@ while ($row = $result->fetch_assoc()) {
             <div class="tab-content" id="categories">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Categories Management</h3>
-                        <button class="btn btn-success" onclick="openModal('addCategoryModal')">
-                            <i class="fas fa-plus"></i> Add Category
-                        </button>
+                        <h3 class="table-title">Categories</h3>
+                        <button class="btn btn-primary" onclick="openAddCategoryModal()">Add Category</button>
                     </div>
-                    <table>
+                    <table id="categoriesTable">
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -1825,16 +956,74 @@ while ($row = $result->fetch_assoc()) {
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="categoriesTable">
+                        <tbody>
                             <?php foreach ($categories as $category): ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($category['id']); ?></td>
                                     <td><?php echo htmlspecialchars($category['name']); ?></td>
-                                    <td><?php echo htmlspecialchars($category['description']); ?></td>
+                                    <td><?php echo htmlspecialchars($category['description'] ?: 'N/A'); ?></td>
                                     <td><?php echo htmlspecialchars(date('M d, Y', strtotime($category['created_at']))); ?></td>
                                     <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editCategory(<?php echo htmlspecialchars($category['id']); ?>)">Edit</button>
-                                        <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteCategory(<?php echo htmlspecialchars($category['id']); ?>)">Delete</button>
+                                        <button class="btn btn-primary btn-sm" onclick="openEditCategoryModal(<?php echo htmlspecialchars(json_encode($category)); ?>)">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteCategory(<?php echo $category['id']; ?>)">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Orders Tab -->
+            <div class="tab-content" id="orders">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3 class="table-title">Orders</h3>
+                        <select id="orderStatusFilter" class="form-input" onchange="fetchOrders()">
+                            <option value="all">All Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="processing">Processing</option>
+                            <option value="shipped">Shipped</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <table id="ordersTable">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer</th>
+                                <th>Total</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($orders as $order): ?>
+                                <tr>
+                                    <td>#<?php echo htmlspecialchars($order['id']); ?></td>
+                                    <td><?php echo htmlspecialchars($order['full_name']); ?></td>
+                                    <td>$<?php echo number_format($order['total'] + $order['delivery_fee'], 2); ?></td>
+                                    <td>
+                                        <span class="status-badge status-<?php echo htmlspecialchars(strtolower($order['status'])); ?>">
+                                            <?php echo htmlspecialchars(ucfirst($order['status'])); ?>
+                                        </span>
+                                    </td>
+                                    <td><?php echo htmlspecialchars(date('M d, Y', strtotime($order['created_at']))); ?></td>
+                                    <td>
+                                        <button class="btn btn-primary btn-sm" onclick="viewOrder(<?php echo $order['id']; ?>)">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                        <?php if ($order['status'] === 'processing'): ?>
+                                            <button class="btn btn-success btn-sm" onclick="openShipOrderModal(<?php echo $order['id']; ?>)">
+                                                <i class="fas fa-truck"></i> Ship
+                                            </button>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1847,35 +1036,37 @@ while ($row = $result->fetch_assoc()) {
             <div class="tab-content" id="users">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Users Management</h3>
-                        <button class="btn btn-success" onclick="openModal('addUserModal')">
-                            <i class="fas fa-plus"></i> Add User
-                        </button>
+                        <h3 class="table-title">Users</h3>
+                        <button class="btn btn-primary" onclick="openAddUserModal()">Add User</button>
                     </div>
-                    <table>
+                    <table id="usersTable">
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Email</th>
-                                <th>Full Name</th>
+                                <th>Name</th>
                                 <th>Phone</th>
-                                <th>Role</th>
+                                <th>Admin</th>
                                 <th>Created At</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="usersTable">
+                        <tbody>
                             <?php foreach ($users as $user): ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($user['id']); ?></td>
                                     <td><?php echo htmlspecialchars($user['email']); ?></td>
                                     <td><?php echo htmlspecialchars($user['full_name']); ?></td>
                                     <td><?php echo htmlspecialchars($user['phone']); ?></td>
-                                    <td><?php echo $user['is_admin'] ? 'Admin' : 'User'; ?></td>
+                                    <td><?php echo $user['is_admin'] ? '<i class="fas fa-check text-success"></i>' : ''; ?></td>
                                     <td><?php echo htmlspecialchars(date('M d, Y', strtotime($user['created_at']))); ?></td>
                                     <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editUser(<?php echo htmlspecialchars($user['id']); ?>)">Edit</button>
-                                        <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteUser(<?php echo htmlspecialchars($user['id']); ?>)">Delete</button>
+                                        <button class="btn btn-primary btn-sm" onclick="openEditUserModal(<?php echo htmlspecialchars(json_encode($user)); ?>)">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteUser(<?php echo $user['id']; ?>)">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1888,26 +1079,22 @@ while ($row = $result->fetch_assoc()) {
             <div class="tab-content" id="inventory">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Inventory Management</h3>
+                        <h3 class="table-title">Inventory</h3>
                     </div>
-                    <table>
+                    <table id="inventoryTable">
                         <thead>
                             <tr>
                                 <th>Product ID</th>
-                                <th>Product Name</th>
+                                <th>Name</th>
                                 <th>Stock Quantity</th>
-                                <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="inventoryTable">
+                        <tbody>
                             <?php foreach ($inventory as $item): ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($item['id']); ?></td>
                                     <td><?php echo htmlspecialchars($item['name']); ?></td>
                                     <td><?php echo htmlspecialchars($item['stock_quantity']); ?></td>
-                                    <td>
-                                        <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="editProduct(<?php echo htmlspecialchars($item['id']); ?>)">Edit</button>
-                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -1919,9 +1106,9 @@ while ($row = $result->fetch_assoc()) {
             <div class="tab-content" id="reviews">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Reviews Management</h3>
+                        <h3 class="table-title">Reviews</h3>
                     </div>
-                    <table>
+                    <table id="reviewsTable">
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -1929,11 +1116,11 @@ while ($row = $result->fetch_assoc()) {
                                 <th>User</th>
                                 <th>Rating</th>
                                 <th>Review</th>
-                                <th>Created At</th>
+                                <th>Date</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="reviewsTable">
+                        <tbody>
                             <?php foreach ($reviews as $review): ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($review['id']); ?></td>
@@ -1943,7 +1130,9 @@ while ($row = $result->fetch_assoc()) {
                                     <td><?php echo htmlspecialchars($review['review_text']); ?></td>
                                     <td><?php echo htmlspecialchars(date('M d, Y', strtotime($review['created_at']))); ?></td>
                                     <td>
-                                        <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="deleteReview(<?php echo htmlspecialchars($review['id']); ?>)">Delete</button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteReview(<?php echo $review['id']; ?>)">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1956,24 +1145,24 @@ while ($row = $result->fetch_assoc()) {
             <div class="tab-content" id="settings">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Settings</h3>
+                        <h3 class="table-title">Change Password</h3>
                     </div>
-                    <form id="changePasswordForm" onsubmit="event.preventDefault(); changePassword();">
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label class="form-label" for="currentPassword">Current Password</label>
-                                <input type="password" id="currentPassword" class="form-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="newPassword">New Password</label>
-                                <input type="password" id="newPassword" class="form-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="confirmPassword">Confirm Password</label>
-                                <input type="password" id="confirmPassword" class="form-input" required>
-                            </div>
+                    <form id="changePasswordForm" class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Current Password</label>
+                            <input type="password" class="form-input" id="currentPassword" required>
                         </div>
-                        <button type="submit" class="btn btn-primary">Change Password</button>
+                        <div class="form-group">
+                            <label class="form-label">New Password</label>
+                            <input type="password" class="form-input" id="newPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Confirm New Password</label>
+                            <input type="password" class="form-input" id="confirmPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">Change Password</button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -1982,86 +1171,111 @@ while ($row = $result->fetch_assoc()) {
             <div class="tab-content" id="hero">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Hero Section Management</h3>
+                        <h3 class="table-title">Hero Section</h3>
                     </div>
-                    <form id="heroForm" onsubmit="event.preventDefault(); updateHeroSection();">
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label class="form-label" for="heroTitle">Title</label>
-                                <input type="text" id="heroTitle" class="form-input" value="<?php echo htmlspecialchars($hero_section['title'] ?? ''); ?>" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="heroDescription">Description</label>
-                                <textarea id="heroDescription" class="form-input" rows="4" required><?php echo htmlspecialchars($hero_section['description'] ?? ''); ?></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="heroButtonText">Button Text</label>
-                                <input type="text" id="heroButtonText" class="form-input" value="<?php echo htmlspecialchars($hero_section['button_text'] ?? ''); ?>" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="heroMainImage">Main Image</label>
-                                <input type="file" id="heroMainImage" class="form-input" accept="image/*">
-                                <input type="hidden" id="existingMainImage" value="<?php echo htmlspecialchars($hero_section['main_image'] ?? ''); ?>">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="heroSparkleImage1">Sparkle Image 1</label>
-                                <input type="file" id="heroSparkleImage1" class="form-input" accept="image/*">
-                                <input type="hidden" id="existingSparkle1" value="<?php echo htmlspecialchars($hero_section['sparkle_image_1'] ?? ''); ?>">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="heroSparkleImage2">Sparkle Image 2</label>
-                                <input type="file" id="heroSparkleImage2" class="form-input" accept="image/*">
-                                <input type="hidden" id="existingSparkle2" value="<?php echo htmlspecialchars($hero_section['sparkle_image_2'] ?? ''); ?>">
-                            </div>
+                    <form id="heroSectionForm" class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Title</label>
+                            <input type="text" class="form-input" id="heroTitle" value="<?php echo htmlspecialchars($hero_section['title'] ?? ''); ?>" required>
                         </div>
-                        <div class="hero-preview">
-                            <h1 id="heroTitlePreview"><?php echo htmlspecialchars($hero_section['title'] ?? 'Your Title'); ?></h1>
-                            <p id="heroDescriptionPreview"><?php echo htmlspecialchars($hero_section['description'] ?? 'Your Description'); ?></p>
-                            <button class="cta-button" id="heroButtonPreview"><?php echo htmlspecialchars($hero_section['button_text'] ?? 'Shop Now'); ?></button>
-                            <div class="hero-image-preview">
-                                <img id="heroMainImagePreview" src="<?php echo htmlspecialchars($hero_section['main_image'] ?? 'https://via.placeholder.com/150'); ?>" alt="Main Image" style="width: 100px; height: auto;">
-                                <img id="heroSparkle1Preview" src="<?php echo htmlspecialchars($hero_section['sparkle_image_1'] ?? 'https://via.placeholder.com/50'); ?>" alt="Sparkle 1" style="width: 50px; height: auto;">
-                                <img id="heroSparkle2Preview" src="<?php echo htmlspecialchars($hero_section['sparkle_image_2'] ?? 'https://via.placeholder.com/50'); ?>" alt="Sparkle 2" style="width: 50px; height: auto;">
-                            </div>
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-input" id="heroDescription" required><?php echo htmlspecialchars($hero_section['description'] ?? ''); ?></textarea>
                         </div>
-                        <button type="submit" class="btn btn-primary">Update Hero Section</button>
+                        <div class="form-group">
+                            <label class="form-label">Button Text</label>
+                            <input type="text" class="form-input" id="heroButtonText" value="<?php echo htmlspecialchars($hero_section['button_text'] ?? ''); ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Main Image</label>
+                            <input type="file" class="form-input" id="heroMainImage" accept="image/*">
+                            <input type="hidden" id="existingMainImage" value="<?php echo htmlspecialchars($hero_section['main_image'] ?? 'images/hero-couple.png'); ?>">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Sparkle Image 1</label>
+                            <input type="file" class="form-input" id="heroSparkleImage1" accept="image/*">
+                            <input type="hidden" id="existingSparkle1" value="<?php echo htmlspecialchars($hero_section['sparkle_image_1'] ?? 'images/sparkle-1.png'); ?>">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Sparkle Image 2</label>
+                            <input type="file" class="form-input" id="heroSparkleImage2" accept="image/*">
+                            <input type="hidden" id="existingSparkle2" value="<?php echo htmlspecialchars($hero_section['sparkle_image_2'] ?? 'images/sparkle-2.png'); ?>">
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">Update Hero Section</button>
+                        </div>
                     </form>
+                    <div class="hero-preview">
+                        <h1 id="heroPreviewTitle"><?php echo htmlspecialchars($hero_section['title'] ?? 'Welcome to Deeken'); ?></h1>
+                        <p id="heroPreviewDescription"><?php echo htmlspecialchars($hero_section['description'] ?? 'Discover our amazing products.'); ?></p>
+                        <button class="cta-button" id="heroPreviewButton"><?php echo htmlspecialchars($hero_section['button_text'] ?? 'Shop Now'); ?></button>
+                        <div class="hero-image-preview">
+                            <img id="heroPreviewMainImage" src="<?php echo htmlspecialchars($hero_section['main_image'] ?? 'images/hero-couple.png'); ?>" alt="Main Image" style="width: 100px; height: 100px; object-fit: cover;">
+                            <img id="heroPreviewSparkle1" src="<?php echo htmlspecialchars($hero_section['sparkle_image_1'] ?? 'images/sparkle-1.png'); ?>" alt="Sparkle 1" style="width: 50px; height: 50px;">
+                            <img id="heroPreviewSparkle2" src="<?php echo htmlspecialchars($hero_section['sparkle_image_2'] ?? 'images/sparkle-2.png'); ?>" alt="Sparkle 2" style="width: 50px; height: 50px;">
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Modals -->
-            <!-- Add Product Modal -->
-            <div class="modal" id="addProductModal">
+            <!-- Quick Add Modal -->
+            <div class="modal" id="quickAddModal">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3 class="modal-title">Add Product</h3>
-                        <button class="modal-close" onclick="closeModal('addProductModal')">×</button>
+                        <h2 class="modal-title">Quick Add</h2>
+                        <button class="modal-close" onclick="closeModal('quickAddModal')">×</button>
                     </div>
-                    <form id="addProductForm" onsubmit="event.preventDefault(); addProduct();">
+                    <form id="quickAddForm">
                         <div class="form-group">
-                            <label class="form-label" for="productName">Product Name</label>
-                            <input type="text" id="productName" class="form-input" required>
+                            <label class="form-label">Select Type</label>
+                            <select class="form-input" id="quickAddType" onchange="updateQuickAddForm()">
+                                <option value="product">Product</option>
+                                <option value="category">Category</option>
+                                <option value="user">User</option>
+                            </select>
+                        </div>
+                        <div id="quickAddFields"></div>
+                        <button type="submit" class="btn btn-primary">Add</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Add/Edit Product Modal -->
+            <div class="modal" id="productModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title" id="productModalTitle">Add Product</h2>
+                        <button class="modal-close" onclick="closeModal('productModal')">×</button>
+                    </div>
+                    <form id="productForm">
+                        <input type="hidden" id="productId">
+                        <div class="form-group">
+                            <label class="form-label">Name</label>
+                            <input type="text" class="form-input" id="productName" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="productPrice">Price</label>
-                            <input type="number" id="productPrice" class="form-input" step="0.01" required>
+                            <label class="form-label">Price</label>
+                            <input type="number" class="form-input" id="productPrice" step="0.01" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="productStock">Stock Quantity</label>
-                            <input type="number" id="productStock" class="form-input" required>
+                            <label class="form-label">Stock Quantity</label>
+                            <input type="number" class="form-input" id="productStock" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="productCategory">Category</label>
-                            <select id="productCategory" class="form-input" required>
+                            <label class="form-label">Category</label>
+                            <select class="form-input" id="productCategory" required>
                                 <option value="">Select Category</option>
                                 <?php foreach ($categories as $category): ?>
-                                    <option value="<?php echo htmlspecialchars($category['id']); ?>"><?php echo htmlspecialchars($category['name']); ?></option>
+                                    <option value="<?php echo htmlspecialchars($category['id']); ?>">
+                                        <?php echo htmlspecialchars($category['name']); ?>
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="productMiscAttribute">Miscellaneous Attribute</label>
-                            <select id="productMiscAttribute" class="form-input">
+                            <label class="form-label">Miscellaneous Attribute</label>
+                            <select class="form-input" id="productMiscAttribute">
                                 <option value="">None</option>
                                 <option value="new_arrival">New Arrival</option>
                                 <option value="featured">Featured</option>
@@ -2069,216 +1283,87 @@ while ($row = $result->fetch_assoc()) {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="productFeatured">Featured</label>
+                            <label class="form-label">Featured</label>
                             <input type="checkbox" id="productFeatured">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="productDescription">Description</label>
-                            <textarea id="productDescription" class="form-input" rows="4"></textarea>
+                            <label class="form-label">Description</label>
+                            <textarea class="form-input" id="productDescription"></textarea>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="productImage">Image</label>
-                            <input type="file" id="productImage" class="form-input" accept="image/*">
-                        </div>
-                        <button type="submit" class="btn btn-primary">Add Product</button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Edit Product Modal -->
-            <div class="modal" id="editProductModal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 class="modal-title">Edit Product</h3>
-                        <button class="modal-close" onclick="closeModal('editProductModal')">×</button>
-                    </div>
-                    <form id="editProductForm" onsubmit="event.preventDefault(); updateProduct();">
-                        <input type="hidden" id="editProductId">
-                        <div class="form-group">
-                            <label class="form-label" for="editProductName">Product Name</label>
-                            <input type="text" id="editProductName" class="form-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editProductPrice">Price</label>
-                            <input type="number" id="editProductPrice" class="form-input" step="0.01" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editProductStock">Stock Quantity</label>
-                            <input type="number" id="editProductStock" class="form-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editProductCategory">Category</label>
-                            <select id="editProductCategory" class="form-input" required>
-                                <option value="">Select Category</option>
-                                <?php foreach ($categories as $category): ?>
-                                    <option value="<?php echo htmlspecialchars($category['id']); ?>"><?php echo htmlspecialchars($category['name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editProductMiscAttribute">Miscellaneous Attribute</label>
-                            <select id="editProductMiscAttribute" class="form-input">
-                                <option value="">None</option>
-                                <option value="new_arrival">New Arrival</option>
-                                <option value="featured">Featured</option>
-                                <option value="trending">Trending</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editProductFeatured">Featured</label>
-                            <input type="checkbox" id="editProductFeatured">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editProductDescription">Description</label>
-                            <textarea id="editProductDescription" class="form-input" rows="4"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editProductImage">Image</label>
-                            <input type="file" id="editProductImage" class="form-input" accept="image/*">
+                            <label class="form-label">Image</label>
+                            <input type="file" class="form-input" id="productImage" accept="image/*">
                             <input type="hidden" id="existingProductImage">
                         </div>
-                        <button type="submit" class="btn btn-primary">Update Product</button>
+                        <button type="submit" class="btn btn-primary">Save Product</button>
                     </form>
                 </div>
             </div>
 
-            <!-- Add Category Modal -->
-            <div class="modal" id="addCategoryModal">
+            <!-- Add/Edit Category Modal -->
+            <div class="modal" id="categoryModal">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3 class="modal-title">Add Category</h3>
-                        <button class="modal-close" onclick="closeModal('addCategoryModal')">×</button>
+                        <h2 class="modal-title" id="categoryModalTitle">Add Category</h2>
+                        <button class="modal-close" onclick="closeModal('categoryModal')">×</button>
                     </div>
-                    <form id="addCategoryForm" onsubmit="event.preventDefault(); addCategory();">
+                    <form id="categoryForm">
+                        <input type="hidden" id="categoryId">
                         <div class="form-group">
-                            <label class="form-label" for="categoryName">Category Name</label>
-                            <input type="text" id="categoryName" class="form-input" required>
+                            <label class="form-label">Name</label>
+                            <input type="text" class="form-input" id="categoryName" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="categoryDescription">Description</label>
-                            <textarea id="categoryDescription" class="form-input" rows="4"></textarea>
+                            <label class="form-label">Description</label>
+                            <textarea class="form-input" id="categoryDescription"></textarea>
                         </div>
-                        <button type="submit" class="btn btn-primary">Add Category</button>
+                        <button type="submit" class="btn btn-primary">Save Category</button>
                     </form>
                 </div>
             </div>
 
-            <!-- Edit Category Modal -->
-            <div class="modal" id="editCategoryModal">
+            <!-- Add/Edit User Modal -->
+            <div class="modal" id="userModal">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3 class="modal-title">Edit Category</h3>
-                        <button class="modal-close" onclick="closeModal('editCategoryModal')">×</button>
+                        <h2 class="modal-title" id="userModalTitle">Add User</h2>
+                        <button class="modal-close" onclick="closeModal('userModal')">×</button>
                     </div>
-                    <form id="editCategoryForm" onsubmit="event.preventDefault(); updateCategory();">
-                        <input type="hidden" id="editCategoryId">
+                    <form id="userForm">
+                        <input type="hidden" id="userId">
                         <div class="form-group">
-                            <label class="form-label" for="editCategoryName">Category Name</label>
-                            <input type="text" id="editCategoryName" class="form-input" required>
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" id="userEmail" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="editCategoryDescription">Description</label>
-                            <textarea id="editCategoryDescription" class="form-input" rows="4"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Update Category</button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Add User Modal -->
-            <div class="modal" id="addUserModal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 class="modal-title">Add User</h3>
-                        <button class="modal-close" onclick="closeModal('addUserModal')">×</button>
-                    </div>
-                    <form id="addUserForm" onsubmit="event.preventDefault(); addUser();">
-                        <div class="form-group">
-                            <label class="form-label" for="userEmail">Email</label>
-                            <input type="email" id="userEmail" class="form-input" required>
+                            <label class="form-label">Full Name</label>
+                            <input type="text" class="form-input" id="userFullName" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="userFullName">Full Name</label>
-                            <input type="text" id="userFullName" class="form-input" required>
+                            <label class="form-label">Phone</label>
+                            <input type="text" class="form-input" id="userPhone" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="userPhone">Phone</label>
-                            <input type="text" id="userPhone" class="form-input" required>
+                            <label class="form-label">Password (leave blank to keep current)</label>
+                            <input type="password" class="form-input" id="userPassword">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="userPassword">Password</label>
-                            <input type="password" id="userPassword" class="form-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="userIsAdmin">Admin</label>
+                            <label class="form-label">Admin</label>
                             <input type="checkbox" id="userIsAdmin">
                         </div>
-                        <button type="submit" class="btn btn-primary">Add User</button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Edit User Modal -->
-            <div class="modal" id="editUserModal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 class="modal-title">Edit User</h3>
-                        <button class="modal-close" onclick="closeModal('editUserModal')">×</button>
-                    </div>
-                    <form id="editUserForm" onsubmit="event.preventDefault(); updateUser();">
-                        <input type="hidden" id="editUserId">
-                        <div class="form-group">
-                            <label class="form-label" for="editUserEmail">Email</label>
-                            <input type="email" id="editUserEmail" class="form-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editUserFullName">Full Name</label>
-                            <input type="text" id="editUserFullName" class="form-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editUserPhone">Phone</label>
-                            <input type="text" id="editUserPhone" class="form-input" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="editUserIsAdmin">Admin</label>
-                            <input type="checkbox" id="editUserIsAdmin">
-                        </div>
-                        <button type="submit" class="btn btn-primary">Update User</button>
+                        <button type="submit" class="btn btn-primary">Save User</button>
                     </form>
                 </div>
             </div>
 
             <!-- View Order Modal -->
-            <div class="modal" id="viewOrderModal">
+            <div class="modal" id="orderModal">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3 class="modal-title">Order Details</h3>
-                        <button class="modal-close" onclick="closeModal('viewOrderModal')">×</button>
+                        <h2 class="modal-title">Order Details</h2>
+                        <button class="modal-close" onclick="closeModal('orderModal')">×</button>
                     </div>
-                    <div id="orderDetails">
-                        <h4>Order Information</h4>
-                        <p><strong>Order ID:</strong> <span id="orderId"></span></p>
-                        <p><strong>Customer:</strong> <span id="orderCustomer"></span></p>
-                        <p><strong>Email:</strong> <span id="orderEmail"></span></p>
-                        <p><strong>Phone:</strong> <span id="orderPhone"></span></p>
-                        <p><strong>Address:</strong> <span id="orderAddress"></span></p>
-                        <p><strong>Total:</strong> <span id="orderTotal"></span></p>
-                        <p><strong>Delivery Fee:</strong> <span id="orderDeliveryFee"></span></p>
-                        <p><strong>Status:</strong> <span id="orderStatus"></span></p>
-                        <p><strong>Date:</strong> <span id="orderDate"></span></p>
-                        <h4>Order Items</h4>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>SKU</th>
-                                    <th>Quantity</th>
-                                    <th>Price</th>
-                                </tr>
-                            </thead>
-                            <tbody id="orderItemsTable"></tbody>
-                        </table>
-                    </div>
+                    <div id="orderDetails"></div>
                 </div>
             </div>
 
@@ -2286,98 +1371,78 @@ while ($row = $result->fetch_assoc()) {
             <div class="modal" id="shipOrderModal">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3 class="modal-title">Ship Order</h3>
+                        <h2 class="modal-title">Ship Order</h2>
                         <button class="modal-close" onclick="closeModal('shipOrderModal')">×</button>
                     </div>
-                    <form id="shipOrderForm" onsubmit="event.preventDefault(); submitShipOrder();">
+                    <form id="shipOrderForm">
                         <input type="hidden" id="shipOrderId">
                         <div class="form-group">
-                            <label class="form-label" for="estimatedDeliveryDays">Estimated Delivery Days</label>
-                            <input type="number" id="estimatedDeliveryDays" class="form-input" min="1" required>
+                            <label class="form-label">Estimated Delivery Days</label>
+                            <input type="number" class="form-input" id="estimatedDeliveryDays" required min="1">
                         </div>
-                        <div class="form-group">
-                            <p><strong>Preview Notification:</strong> <span id="deliveryPreview">Order Received and Ready to Ship. Package will be delivered in <span id="deliveryDaysPreview">0</span> days.</span></p>
-                        </div>
-                        <button type="submit" class="btn btn-primary" id="shipOrderSubmit">Ship Order</button>
+                        <button type="submit" class="btn btn-primary">Mark as Shipped</button>
                     </form>
-                </div>
-            </div>
-
-            <!-- Quick Add Modal -->
-            <div class="modal" id="quickAddModal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 class="modal-title">Quick Add</h3>
-                        <button class="modal-close" onclick="closeModal('quickAddModal')">×</button>
-                    </div>
-                    <div class="form-group">
-                        <button class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;" onclick="openModal('addProductModal'); closeModal('quickAddModal');">Add Product</button>
-                        <button class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;" onclick="openModal('addCategoryModal'); closeModal('quickAddModal');">Add Category</button>
-                        <button class="btn btn-primary" style="width: 100%;" onclick="openModal('addUserModal'); closeModal('quickAddModal');">Add User</button>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // ----- Theme Toggle -----
+        // Initialize theme
         function toggleTheme() {
             const body = document.body;
             const themeIcon = document.getElementById('themeIcon');
             if (body.dataset.theme === 'dark') {
                 body.dataset.theme = 'light';
-                themeIcon.className = 'fas fa-moon';
+                themeIcon.classList.remove('fa-sun');
+                themeIcon.classList.add('fa-moon');
                 localStorage.setItem('theme', 'light');
             } else {
                 body.dataset.theme = 'dark';
-                themeIcon.className = 'fas fa-sun';
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
                 localStorage.setItem('theme', 'dark');
             }
         }
 
         // Apply saved theme
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        document.body.dataset.theme = savedTheme;
-        if (savedTheme === 'dark') {
-            document.getElementById('themeIcon').className = 'fas fa-sun';
+        if (localStorage.getItem('theme') === 'dark') {
+            toggleTheme();
         }
 
-        // ----- Tab Switching -----
+        // Switch tabs
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
             document.querySelector(`.nav-link[data-tab="${tabId}"]`).classList.add('active');
             document.getElementById('pageTitle').textContent = tabId.charAt(0).toUpperCase() + tabId.slice(1);
             if (tabId === 'orders') fetchOrders();
+            if (tabId === 'hero') fetchHeroSection();
         }
 
-        // Initialize default tab
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', () => switchTab(link.dataset.tab));
-        });
-
-        // ----- Modal Handling -----
+        // Modal handling
         function openModal(modalId) {
             document.getElementById(modalId).classList.add('active');
-            if (modalId === 'shipOrderModal') {
-                document.getElementById('shipOrderForm').reset();
-                document.getElementById('deliveryDaysPreview').textContent = '0';
-                document.getElementById('estimatedDeliveryDays').focus();
-            }
         }
 
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
+            if (modalId === 'productModal') document.getElementById('productForm').reset();
+            if (modalId === 'categoryModal') document.getElementById('categoryForm').reset();
+            if (modalId === 'userModal') document.getElementById('userForm').reset();
         }
 
-        // ----- Alert Handling -----
-        function showAlert(message, type = 'success') {
+        // Alert handling
+        function showAlert(message, type) {
             const alert = document.createElement('div');
             alert.className = `alert alert-${type}`;
-            alert.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message} <span class="alert-dismiss" onclick="dismissAlert(this)">×</span>`;
-            document.querySelector('.main-content').insertBefore(alert, document.querySelector('.main-content').firstChild);
+            alert.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                ${message}
+                <span class="alert-dismiss" onclick="dismissAlert(this)">×</span>
+            `;
+            document.querySelector('.main-content').insertBefore(alert, document.querySelector('.top-bar').nextSibling);
             setTimeout(() => alert.remove(), 5000);
         }
 
@@ -2385,409 +1450,673 @@ while ($row = $result->fetch_assoc()) {
             element.parentElement.remove();
         }
 
-        // ----- AJAX Helper -----
-        async function sendAjaxRequest(url, data, method = 'POST') {
+        // AJAX Request
+        async function sendAjaxRequest(data, url = 'ajax.php', method = 'POST') {
             const formData = new FormData();
             for (const key in data) {
-                formData.append(key, data[key]);
-            }
-            const response = await fetch(url, {
-                method,
-                body: method === 'POST' ? formData : undefined,
-            });
-            return response.json();
-        }
-
-        // ----- Hero Section Functions -----
-        function updateHeroSection() {
-            const formData = new FormData();
-            formData.append('action', 'update_hero_section');
-            formData.append('title', document.getElementById('heroTitle').value);
-            formData.append('description', document.getElementById('heroDescription').value);
-            formData.append('button_text', document.getElementById('heroButtonText').value);
-            formData.append('existing_main_image', document.getElementById('existingMainImage').value);
-            formData.append('existing_sparkle_1', document.getElementById('existingSparkle1').value);
-            formData.append('existing_sparkle_2', document.getElementById('existingSparkle2').value);
-            if (document.getElementById('heroMainImage').files[0]) {
-                formData.append('main_image', document.getElementById('heroMainImage').files[0]);
-            }
-            if (document.getElementById('heroSparkleImage1').files[0]) {
-                formData.append('sparkle_image_1', document.getElementById('heroSparkleImage1').files[0]);
-            }
-            if (document.getElementById('heroSparkleImage2').files[0]) {
-                formData.append('sparkle_image_2', document.getElementById('heroSparkleImage2').files[0]);
-            }
-
-            sendAjaxRequest('', formData).then(response => {
-                showAlert(response.message, response.success ? 'success' : 'error');
-                if (response.success) {
-                    location.reload();
+                if (data[key] instanceof File) {
+                    formData.append(key, data[key]);
+                } else if (data[key] !== undefined) {
+                    formData.append(key, data[key]);
                 }
-            });
-        }
-
-        // Real-time Hero Preview
-        document.getElementById('heroTitle').addEventListener('input', function () {
-            document.getElementById('heroTitlePreview').textContent = this.value || 'Your Title';
-        });
-        document.getElementById('heroDescription').addEventListener('input', function () {
-            document.getElementById('heroDescriptionPreview').textContent = this.value || 'Your Description';
-        });
-        document.getElementById('heroButtonText').addEventListener('input', function () {
-            document.getElementById('heroButtonPreview').textContent = this.value || 'Shop Now';
-        });
-        document.getElementById('heroMainImage').addEventListener('change', function () {
-            const file = this.files[0];
-            if (file) {
-                document.getElementById('heroMainImagePreview').src = URL.createObjectURL(file);
             }
-        });
-        document.getElementById('heroSparkleImage1').addEventListener('change', function () {
-            const file = this.files[0];
-            if (file) {
-                document.getElementById('heroSparkle1Preview').src = URL.createObjectURL(file);
-            }
-        });
-        document.getElementById('heroSparkleImage2').addEventListener('change', function () {
-            const file = this.files[0];
-            if (file) {
-                document.getElementById('heroSparkle2Preview').src = URL.createObjectURL(file);
-            }
-        });
-
-        // ----- Product Functions -----
-        function addProduct() {
-            const formData = new FormData();
-            formData.append('action', 'add_product');
-            formData.append('name', document.getElementById('productName').value);
-            formData.append('price', document.getElementById('productPrice').value);
-            formData.append('stock_quantity', document.getElementById('productStock').value);
-            formData.append('category_id', document.getElementById('productCategory').value);
-            formData.append('misc_attribute', document.getElementById('productMiscAttribute').value);
-            formData.append('featured', document.getElementById('productFeatured').checked ? 1 : 0);
-            formData.append('description', document.getElementById('productDescription').value);
-            if (document.getElementById('productImage').files[0]) {
-                formData.append('image', document.getElementById('productImage').files[0]);
-            }
-
-            sendAjaxRequest('', formData).then(response => {
-                showAlert(response.message, response.success ? 'success' : 'error');
-                if (response.success) {
-                    closeModal('addProductModal');
-                    location.reload();
-                }
-            });
-        }
-
-        function editProduct(id) {
-            sendAjaxRequest('', { action: 'search_products', search: `id:${id}` }).then(products => {
-                if (products.length > 0) {
-                    const product = products[0];
-                    document.getElementById('editProductId').value = product.id;
-                    document.getElementById('editProductName').value = product.name;
-                    document.getElementById('editProductPrice').value = product.price;
-                    document.getElementById('editProductStock').value = product.stock_quantity;
-                    document.getElementById('editProductCategory').value = product.category_id || '';
-                    document.getElementById('editProductMiscAttribute').value = product.misc_attribute || '';
-                    document.getElementById('editProductFeatured').checked = product.featured == 1;
-                    document.getElementById('editProductDescription').value = product.description || '';
-                    document.getElementById('existingProductImage').value = product.image || '';
-                    openModal('editProductModal');
-                } else {
-                    showAlert('Product not found.', 'error');
-                }
-            });
-        }
-
-        function updateProduct() {
-            const formData = new FormData();
-            formData.append('action', 'edit_product');
-            formData.append('product_id', document.getElementById('editProductId').value);
-            formData.append('name', document.getElementById('editProductName').value);
-            formData.append('price', document.getElementById('editProductPrice').value);
-            formData.append('stock_quantity', document.getElementById('editProductStock').value);
-            formData.append('category_id', document.getElementById('editProductCategory').value);
-            formData.append('misc_attribute', document.getElementById('editProductMiscAttribute').value);
-            formData.append('featured', document.getElementById('editProductFeatured').checked ? 1 : 0);
-            formData.append('description', document.getElementById('editProductDescription').value);
-            formData.append('existing_image', document.getElementById('existingProductImage').value);
-            if (document.getElementById('editProductImage').files[0]) {
-                formData.append('image', document.getElementById('editProductImage').files[0]);
-            }
-
-            sendAjaxRequest('', formData).then(response => {
-                showAlert(response.message, response.success ? 'success' : 'error');
-                if (response.success) {
-                    closeModal('editProductModal');
-                    location.reload();
-                }
-            });
-        }
-
-        function deleteProduct(id) {
-            if (confirm('Are you sure you want to delete this product?')) {
-                sendAjaxRequest('', { action: 'delete_product', product_id: id }).then(response => {
-                    showAlert(response.message, response.success ? 'success' : 'error');
-                    if (response.success) {
-                        location.reload();
-                    }
+            try {
+                const response = await fetch(url, {
+                    method,
+                    body: method === 'POST' ? formData : undefined,
                 });
+                const text = await response.text();
+                console.log('Raw response:', text); // Debug raw response
+                try {
+                    const json = JSON.parse(text);
+                    return json;
+                } catch (e) {
+                    console.error('JSON parse error:', e);
+                    throw new Error('Invalid JSON response');
+                }
+            } catch (error) {
+                console.error('AJAX error:', error);
+                showAlert('An error occurred while processing the request.', 'error');
+                throw error;
             }
         }
 
-        // ----- Order Functions -----
-        function fetchOrders() {
-            const status = document.getElementById('orderStatusFilter').value;
-            sendAjaxRequest('', { action: 'fetch_orders', status }).then(orders => {
-                const tbody = document.getElementById('ordersTable');
+        // Quick Add
+        function openQuickAdd() {
+            openModal('quickAddModal');
+            updateQuickAddForm();
+        }
+
+        function updateQuickAddForm() {
+            const type = document.getElementById('quickAddType').value;
+            const fields = document.getElementById('quickAddFields');
+            if (type === 'product') {
+                fields.innerHTML = `
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-input" id="quickProductName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Price</label>
+                        <input type="number" class="form-input" id="quickProductPrice" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Stock Quantity</label>
+                        <input type="number" class="form-input" id="quickProductStock" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <select class="form-input" id="quickProductCategory" required>
+                            <option value="">Select Category</option>
+                            <?php foreach ($categories as $category): ?>
+                                <option value="<?php echo htmlspecialchars($category['id']); ?>">
+                                    <?php echo htmlspecialchars($category['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                `;
+            } else if (type === 'category') {
+                fields.innerHTML = `
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-input" id="quickCategoryName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-input" id="quickCategoryDescription"></textarea>
+                    </div>
+                `;
+            } else if (type === 'user') {
+                fields.innerHTML = `
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-input" id="quickUserEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Full Name</label>
+                        <input type="text" class="form-input" id="quickUserFullName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Phone</label>
+                        <input type="text" class="form-input" id="quickUserPhone" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-input" id="quickUserPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Admin</label>
+                        <input type="checkbox" id="quickUserIsAdmin">
+                    </div>
+                `;
+            }
+        }
+
+        document.getElementById('quickAddForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const type = document.getElementById('quickAddType').value;
+            let data = { action: '' };
+            if (type === 'product') {
+                data = {
+                    action: 'add_product',
+                    name: document.getElementById('quickProductName').value,
+                    price: document.getElementById('quickProductPrice').value,
+                    stock_quantity: document.getElementById('quickProductStock').value,
+                    category_id: document.getElementById('quickProductCategory').value,
+                };
+            } else if (type === 'category') {
+                data = {
+                    action: 'add_category',
+                    name: document.getElementById('quickCategoryName').value,
+                    description: document.getElementById('quickCategoryDescription').value,
+                };
+            } else if (type === 'user') {
+                data = {
+                    action: 'add_user',
+                    email: document.getElementById('quickUserEmail').value,
+                    full_name: document.getElementById('quickUserFullName').value,
+                    phone: document.getElementById('quickUserPhone').value,
+                    password: document.getElementById('quickUserPassword').value,
+                    is_admin: document.getElementById('quickUserIsAdmin').checked ? 1 : 0,
+                };
+            }
+            try {
+                const response = await sendAjaxRequest(data);
+                if (response.success) {
+                    showAlert(response.message, 'success');
+                    closeModal('quickAddModal');
+                    if (type === 'product') searchProducts();
+                    if (type === 'category') fetchCategories();
+                    if (type === 'user') fetchUsers();
+                } else {
+                    showAlert(response.message, 'error');
+                }
+            } catch (error) {
+                showAlert('Failed to add item.', 'error');
+            }
+        });
+
+        // Products
+        function openAddProductModal() {
+            document.getElementById('productModalTitle').textContent = 'Add Product';
+            document.getElementById('productForm').reset();
+            document.getElementById('productId').value = '';
+            document.getElementById('existingProductImage').value = '';
+            openModal('productModal');
+        }
+
+        function openEditProductModal(product) {
+            document.getElementById('productModalTitle').textContent = 'Edit Product';
+            document.getElementById('productId').value = product.id;
+            document.getElementById('productName').value = product.name;
+            document.getElementById('productPrice').value = product.price;
+            document.getElementById('productStock').value = product.stock_quantity || 0;
+            document.getElementById('productCategory').value = product.category_id || '';
+            document.getElementById('productMiscAttribute').value = product.misc_attribute || '';
+            document.getElementById('productFeatured').checked = product.featured == 1;
+            document.getElementById('productDescription').value = product.description || '';
+            document.getElementById('existingProductImage').value = product.image || '';
+            openModal('productModal');
+        }
+
+        document.getElementById('productForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const button = e.target.querySelector('button[type="submit"]');
+            button.classList.add('btn-loading');
+            button.disabled = true;
+            const data = {
+                action: document.getElementById('productId').value ? 'edit_product' : 'add_product',
+                product_id: document.getElementById('productId').value,
+                name: document.getElementById('productName').value,
+                price: document.getElementById('productPrice').value,
+                stock_quantity: document.getElementById('productStock').value,
+                category_id: document.getElementById('productCategory').value,
+                misc_attribute: document.getElementById('productMiscAttribute').value,
+                featured: document.getElementById('productFeatured').checked ? 1 : 0,
+                description: document.getElementById('productDescription').value,
+                existing_image: document.getElementById('existingProductImage').value,
+                image: document.getElementById('productImage').files[0] || null,
+            };
+            try {
+                const response = await sendAjaxRequest(data);
+                if (response.success) {
+                    showAlert(response.message, 'success');
+                    closeModal('productModal');
+                    searchProducts();
+                } else {
+                    showAlert(response.message, 'error');
+                }
+            } catch (error) {
+                showAlert('Failed to save product.', 'error');
+            } finally {
+                button.classList.remove('btn-loading');
+                button.disabled = false;
+            }
+        });
+
+        async function deleteProduct(id) {
+            if (confirm('Are you sure you want to delete this product?')) {
+                try {
+                    const response = await sendAjaxRequest({ action: 'delete_product', product_id: id });
+                    if (response.success) {
+                        showAlert(response.message, 'success');
+                        searchProducts();
+                    } else {
+                        showAlert(response.message, 'error');
+                    }
+                } catch (error) {
+                    showAlert('Failed to delete product.', 'error');
+                }
+            }
+        }
+
+        async function searchProducts() {
+            const search = document.getElementById('productSearch').value;
+            try {
+                const products = await sendAjaxRequest({ action: 'search_products', search });
+                const tbody = document.getElementById('productsTable').querySelector('tbody');
                 tbody.innerHTML = '';
-                orders.forEach(order => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>#${order.id}</td>
-                        <td>${order.full_name}</td>
-                        <td>$${parseFloat(order.total).toFixed(2)}</td>
-                        <td><span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span></td>
-                        <td>${new Date(order.created_at).toLocaleDateString()}</td>
+                products.forEach(product => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${product.id}</td>
+                        <td><img src="${product.image}" alt="Product Image" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"></td>
+                        <td>${product.name}</td>
+                        <td>${product.category || 'N/A'}</td>
+                        <td>$${parseFloat(product.price).toFixed(2)}</td>
+                        <td>${product.stock_quantity || 0}</td>
+                        <td>${product.featured == 1 ? '<i class="fas fa-check text-success"></i>' : ''}</td>
+                        <td>${product.misc_attribute || 'None'}</td>
                         <td>
-                            <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="viewOrder(${order.id})">View</button>
-                            ${order.status === 'processing' ? `<button class="btn btn-success" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="shipOrder(${order.id})">Ship</button>` : ''}
+                            <button class="btn btn-primary btn-sm" onclick="openEditProductModal(${JSON.stringify(product)})">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteProduct(${product.id})">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
                         </td>
                     `;
-                    tbody.appendChild(row);
+                    tbody.appendChild(tr);
                 });
-            });
+            } catch (error) {
+                showAlert('Failed to search products.', 'error');
+            }
         }
 
-        function viewOrder(id) {
-            sendAjaxRequest('', { action: 'fetch_order_details', order_id: id }).then(order => {
-                if (order.info) {
-                    document.getElementById('orderId').textContent = `#${order.info.id}`;
-                    document.getElementById('orderCustomer').textContent = order.info.full_name;
-                    document.getElementById('orderEmail').textContent = order.info.email;
-                    document.getElementById('orderPhone').textContent = order.info.phone;
-                    document.getElementById('orderAddress').textContent = order.info.address;
-                    document.getElementById('orderTotal').textContent = `$${parseFloat(order.info.total).toFixed(2)}`;
-                    document.getElementById('orderDeliveryFee').textContent = `$${parseFloat(order.info.delivery_fee).toFixed(2)}`;
-                    document.getElementById('orderStatus').textContent = order.info.status;
-                    document.getElementById('orderDate').textContent = new Date(order.info.created_at).toLocaleDateString();
-                    const itemsTable = document.getElementById('orderItemsTable');
-                    itemsTable.innerHTML = '';
-                    order.items.forEach(item => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${item.name}</td>
-                            <td>${item.sku}</td>
-                            <td>${item.quantity}</td>
-                            <td>$${parseFloat(item.price).toFixed(2)}</td>
-                        `;
-                        itemsTable.appendChild(row);
-                    });
-                    openModal('viewOrderModal');
+        // Categories
+        function openAddCategoryModal() {
+            document.getElementById('categoryModalTitle').textContent = 'Add Category';
+            document.getElementById('categoryForm').reset();
+            document.getElementById('categoryId').value = '';
+            openModal('categoryModal');
+        }
+
+        function openEditCategoryModal(category) {
+            document.getElementById('categoryModalTitle').textContent = 'Edit Category';
+            document.getElementById('categoryId').value = category.id;
+            document.getElementById('categoryName').value = category.name;
+            document.getElementById('categoryDescription').value = category.description || '';
+            openModal('categoryModal');
+        }
+
+        document.getElementById('categoryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                action: document.getElementById('categoryId').value ? 'edit_category' : 'add_category',
+                category_id: document.getElementById('categoryId').value,
+                name: document.getElementById('categoryName').value,
+                description: document.getElementById('categoryDescription').value,
+            };
+            try {
+                const response = await sendAjaxRequest(data);
+                if (response.success) {
+                    showAlert(response.message, 'success');
+                    closeModal('categoryModal');
+                    fetchCategories();
                 } else {
-                    showAlert('Order not found.', 'error');
+                    showAlert(response.message, 'error');
                 }
-            });
+            } catch (error) {
+                showAlert('Failed to save category.', 'error');
+            }
+        });
+
+        async function deleteCategory(id) {
+            if (confirm('Are you sure you want to delete this category?')) {
+                try {
+                    const response = await sendAjaxRequest({ action: 'delete_category', category_id: id });
+                    if (response.success) {
+                        showAlert(response.message, 'success');
+                        fetchCategories();
+                    } else {
+                        showAlert(response.message, 'error');
+                    }
+                } catch (error) {
+                    showAlert('Failed to delete category.', 'error');
+                }
+            }
         }
 
-        function shipOrder(orderId) {
-            document.getElementById('shipOrderId').value = orderId;
-            document.getElementById('shipOrderForm').reset();
+        async function fetchCategories() {
+            try {
+                const categories = await sendAjaxRequest({ action: 'fetch_categories' });
+                const tbody = document.getElementById('categoriesTable').querySelector('tbody');
+                tbody.innerHTML = '';
+                categories.forEach(category => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${category.id}</td>
+                        <td>${category.name}</td>
+                        <td>${category.description || 'N/A'}</td>
+                        <td>${new Date(category.created_at).toLocaleDateString()}</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" onclick="openEditCategoryModal(${JSON.stringify(category)})">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteCategory(${category.id})">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                showAlert('Failed to fetch categories.', 'error');
+            }
+        }
+
+        // Orders
+        async function fetchOrders() {
+            const status = document.getElementById('orderStatusFilter').value;
+            try {
+                const orders = await sendAjaxRequest({ action: 'fetch_orders', status });
+                const tbody = document.getElementById('ordersTable').querySelector('tbody');
+                tbody.innerHTML = '';
+                orders.forEach(order => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>#${order.id}</td>
+                        <td>${order.full_name}</td>
+                        <td>$${parseFloat(order.total + order.delivery_fee).toFixed(2)}</td>
+                        <td><span class="status-badge status-${order.status.toLowerCase()}">${order.status.charAt(0).toUpperCase() + order.status.slice(1)}</span></td>
+                        <td>${new Date(order.created_at).toLocaleDateString()}</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" onclick="viewOrder(${order.id})">
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                            ${order.status === 'processing' ? `
+                                <button class="btn btn-success btn-sm" onclick="openShipOrderModal(${order.id})">
+                                    <i class="fas fa-truck"></i> Ship
+                                </button>
+                            ` : ''}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                showAlert('Failed to fetch orders.', 'error');
+            }
+        }
+
+        async function viewOrder(id) {
+            try {
+                const order = await sendAjaxRequest({ action: 'fetch_order_details', order_id: id });
+                const details = document.getElementById('orderDetails');
+                details.innerHTML = `
+                    <p><strong>Order ID:</strong> #${order.info.id}</p>
+                    <p><strong>Customer:</strong> ${order.info.full_name}</p>
+                    <p><strong>Email:</strong> ${order.info.email}</p>
+                    <p><strong>Phone:</strong> ${order.info.phone}</p>
+                    <p><strong>Address:</strong> ${order.info.address}</p>
+                    <p><strong>Total:</strong> $${parseFloat(order.info.total + order.info.delivery_fee).toFixed(2)}</p>
+                    <p><strong>Status:</strong> <span class="status-badge status-${order.info.status.toLowerCase()}">${order.info.status.charAt(0).toUpperCase() + order.info.status.slice(1)}</span></p>
+                    <p><strong>Date:</strong> ${new Date(order.info.created_at).toLocaleDateString()}</p>
+                    <h3>Items</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${order.items.map(item => `
+                                <tr>
+                                    <td>${item.name} (SKU: ${item.sku})</td>
+                                    <td>${item.quantity}</td>
+                                    <td>$${parseFloat(item.price).toFixed(2)}</td>
+                                    <td>$${parseFloat(item.quantity * item.price).toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                openModal('orderModal');
+            } catch (error) {
+                showAlert('Failed to fetch order details.', 'error');
+            }
+        }
+
+        function openShipOrderModal(id) {
+            document.getElementById('shipOrderId').value = id;
             document.getElementById('estimatedDeliveryDays').value = '';
-            document.getElementById('deliveryDaysPreview').textContent = '0';
             openModal('shipOrderModal');
         }
 
-        function submitShipOrder() {
-            const orderId = document.getElementById('shipOrderId').value;
-            const estimatedDeliveryDays = document.getElementById('estimatedDeliveryDays').value;
-            const submitButton = document.getElementById('shipOrderSubmit');
-
-            if (estimatedDeliveryDays <= 0) {
-                showAlert('Estimated delivery days must be a positive number.', 'error');
-                return;
-            }
-
-            submitButton.classList.add('btn-loading');
-            submitButton.disabled = true;
-
-            sendAjaxRequest('', {
+        document.getElementById('shipOrderForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
                 action: 'ship_order',
-                order_id: orderId,
-                estimated_delivery_days: estimatedDeliveryDays
-            }).then(response => {
-                submitButton.classList.remove('btn-loading');
-                submitButton.disabled = false;
-                showAlert(response.message, response.success ? 'success' : 'error');
+                order_id: document.getElementById('shipOrderId').value,
+                estimated_delivery_days: document.getElementById('estimatedDeliveryDays').value,
+            };
+            try {
+                const response = await sendAjaxRequest(data);
                 if (response.success) {
+                    showAlert(response.message, 'success');
                     closeModal('shipOrderModal');
                     fetchOrders();
+                } else {
+                    showAlert(response.message, 'error');
                 }
-            }).catch(error => {
-                submitButton.classList.remove('btn-loading');
-                submitButton.disabled = false;
-                showAlert('An error occurred while processing the request.', 'error');
-                console.error(error);
-            });
-        }
-
-        // Real-time delivery days preview
-        document.getElementById('estimatedDeliveryDays').addEventListener('input', function () {
-            const days = parseInt(this.value) || 0;
-            document.getElementById('deliveryDaysPreview').textContent = days;
+            } catch (error) {
+                showAlert('Failed to ship order.', 'error');
+            }
         });
 
-        // ----- Category Functions -----
-        function addCategory() {
-            sendAjaxRequest('', {
-                action: 'add_category',
-                name: document.getElementById('categoryName').value,
-                description: document.getElementById('categoryDescription').value
-            }).then(response => {
-                showAlert(response.message, response.success ? 'success' : 'error');
-                if (response.success) {
-                    closeModal('addCategoryModal');
-                    location.reload();
-                }
-            });
+        // Users
+        function openAddUserModal() {
+            document.getElementById('userModalTitle').textContent = 'Add User';
+            document.getElementById('userForm').reset();
+            document.getElementById('userId').value = '';
+            openModal('userModal');
         }
 
-        function editCategory(id) {
-            sendAjaxRequest('', { action: 'fetch_categories' }).then(categories => {
-                const category = categories.find(c => c.id == id);
-                if (category) {
-                    document.getElementById('editCategoryId').value = category.id;
-                    document.getElementById('editCategoryName').value = category.name;
-                    document.getElementById('editCategoryDescription').value = category.description || '';
-                    openModal('editCategoryModal');
-                } else {
-                    showAlert('Category not found.', 'error');
-                }
-            });
+        function openEditUserModal(user) {
+            document.getElementById('userModalTitle').textContent = 'Edit User';
+            document.getElementById('userId').value = user.id;
+            document.getElementById('userEmail').value = user.email;
+            document.getElementById('userFullName').value = user.full_name;
+            document.getElementById('userPhone').value = user.phone;
+            document.getElementById('userIsAdmin').checked = user.is_admin == 1;
+            document.getElementById('userPassword').value = '';
+            openModal('userModal');
         }
 
-        function updateCategory() {
-            sendAjaxRequest('', {
-                action: 'edit_category',
-                category_id: document.getElementById('editCategoryId').value,
-                name: document.getElementById('editCategoryName').value,
-                description: document.getElementById('editCategoryDescription').value
-            }).then(response => {
-                showAlert(response.message, response.success ? 'success' : 'error');
-                if (response.success) {
-                    closeModal('editCategoryModal');
-                    location.reload();
-                }
-            });
-        }
-
-        function deleteCategory(id) {
-            if (confirm('Are you sure you want to delete this category?')) {
-                sendAjaxRequest('', { action: 'delete_category', category_id: id }).then(response => {
-                    showAlert(response.message, response.success ? 'success' : 'error');
-                    if (response.success) {
-                        location.reload();
-                    }
-                });
-            }
-        }
-
-        // ----- User Functions -----
-        function addUser() {
-            sendAjaxRequest('', {
-                action: 'add_user',
+        document.getElementById('userForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                action: document.getElementById('userId').value ? 'edit_user' : 'add_user',
+                user_id: document.getElementById('userId').value,
                 email: document.getElementById('userEmail').value,
                 full_name: document.getElementById('userFullName').value,
                 phone: document.getElementById('userPhone').value,
-                password: document.getElementById('userPassword').value,
-                is_admin: document.getElementById('userIsAdmin').checked ? 1 : 0
-            }).then(response => {
-                showAlert(response.message, response.success ? 'success' : 'error');
+                is_admin: document.getElementById('userIsAdmin').checked ? 1 : 0,
+            };
+            if (!document.getElementById('userId').value && document.getElementById('userPassword').value) {
+                data.password = document.getElementById('userPassword').value;
+            }
+            try {
+                const response = await sendAjaxRequest(data);
                 if (response.success) {
-                    closeModal('addUserModal');
-                    location.reload();
-                }
-            });
-        }
-
-        function editUser(id) {
-            sendAjaxRequest('', { action: 'fetch_users' }).then(users => {
-                const user = users.find(u => u.id == id);
-                if (user) {
-                    document.getElementById('editUserId').value = user.id;
-                    document.getElementById('editUserEmail').value = user.email;
-                    document.getElementById('editUserFullName').value = user.full_name;
-                    document.getElementById('editUserPhone').value = user.phone;
-                    document.getElementById('editUserIsAdmin').checked = user.is_admin == 1;
-                    openModal('editUserModal');
+                    showAlert(response.message, 'success');
+                    closeModal('userModal');
+                    fetchUsers();
                 } else {
-                    showAlert('User not found.', 'error');
+                    showAlert(response.message, 'error');
                 }
-            });
-        }
+            } catch (error) {
+                showAlert('Failed to save user.', 'error');
+            }
+        });
 
-        function updateUser() {
-            sendAjaxRequest('', {
-                action: 'edit_user',
-                user_id: document.getElementById('editUserId').value,
-                email: document.getElementById('editUserEmail').value,
-                full_name: document.getElementById('editUserFullName').value,
-                phone: document.getElementById('editUserPhone').value,
-                is_admin: document.getElementById('editUserIsAdmin').checked ? 1 : 0
-            }).then(response => {
-                showAlert(response.message, response.success ? 'success' : 'error');
-                if (response.success) {
-                    closeModal('editUserModal');
-                    location.reload();
-                }
-            });
-        }
-
-        function deleteUser(id) {
+        async function deleteUser(id) {
             if (confirm('Are you sure you want to delete this user?')) {
-                sendAjaxRequest('', { action: 'delete_user', user_id: id }).then(response => {
-                    showAlert(response.message, response.success ? 'success' : 'error');
+                try {
+                    const response = await sendAjaxRequest({ action: 'delete_user', user_id: id });
                     if (response.success) {
-                        location.reload();
+                        showAlert(response.message, 'success');
+                        fetchUsers();
+                    } else {
+                        showAlert(response.message, 'error');
                     }
-                });
+                } catch (error) {
+                    showAlert('Failed to delete user.', 'error');
+                }
             }
         }
 
-        // ----- Review Functions -----
-        function deleteReview(id) {
+        async function fetchUsers() {
+            try {
+                const users = await sendAjaxRequest({ action: 'fetch_users' });
+                const tbody = document.getElementById('usersTable').querySelector('tbody');
+                tbody.innerHTML = '';
+                users.forEach(user => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${user.id}</td>
+                        <td>${user.email}</td>
+                        <td>${user.full_name}</td>
+                        <td>${user.phone}</td>
+                        <td>${user.is_admin == 1 ? '<i class="fas fa-check text-success"></i>' : ''}</td>
+                        <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" onclick="openEditUserModal(${JSON.stringify(user)})">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                showAlert('Failed to fetch users.', 'error');
+            }
+        }
+
+        // Reviews
+        async function deleteReview(id) {
             if (confirm('Are you sure you want to delete this review?')) {
-                sendAjaxRequest('', { action: 'delete_review', review_id: id }).then(response => {
-                    showAlert(response.message, response.success ? 'success' : 'error');
+                try {
+                    const response = await sendAjaxRequest({ action: 'delete_review', review_id: id });
                     if (response.success) {
-                        location.reload();
+                        showAlert(response.message, 'success');
+                        fetchReviews();
+                    } else {
+                        showAlert(response.message, 'error');
                     }
-                });
+                } catch (error) {
+                    showAlert('Failed to delete review.', 'error');
+                }
             }
         }
 
-        // ----- Password Change -----
-        function changePassword() {
-            sendAjaxRequest('', {
+        async function fetchReviews() {
+            try {
+                const reviews = await sendAjaxRequest({ action: 'fetch_reviews' });
+                const tbody = document.getElementById('reviewsTable').querySelector('tbody');
+                tbody.innerHTML = '';
+                reviews.forEach(review => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${review.id}</td>
+                        <td>${review.product_name}</td>
+                        <td>${review.full_name}</td>
+                        <td>${review.rating}/5</td>
+                        <td>${review.review_text}</td>
+                        <td>${new Date(review.created_at).toLocaleDateString()}</td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" onclick="deleteReview(${review.id})">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                showAlert('Failed to fetch reviews.', 'error');
+            }
+        }
+
+        // Settings
+        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
                 action: 'change_password',
                 current_password: document.getElementById('currentPassword').value,
                 new_password: document.getElementById('newPassword').value,
-                confirm_password: document.getElementById('confirmPassword').value
-            }).then(response => {
-                showAlert(response.message, response.success ? 'success' : 'error');
+                confirm_password: document.getElementById('confirmPassword').value,
+            };
+            try {
+                const response = await sendAjaxRequest(data);
                 if (response.success) {
+                    showAlert(response.message, 'success');
                     document.getElementById('changePasswordForm').reset();
+                } else {
+                    showAlert(response.message, 'error');
                 }
-            });
-        }
+            } catch (error) {
+                showAlert('Failed to change password.', 'error');
+            }
+        });
 
-        // ----- Quick Add -----
-        function openQuickAdd() {
-            openModal('quickAddModal');
-        }
+        // Hero Section
+async function fetchHeroSection() {
+    try {
+        const hero = await sendAjaxRequest({ action: 'fetch_hero_section' });
+        document.getElementById('heroTitle').value = hero.title || '';
+        document.getElementById('heroDescription').value = hero.description || '';
+        document.getElementById('heroButtonText').value = hero.button_text || '';
+        document.getElementById('existingMainImage').value = hero.main_image || 'https://via.placeholder.com/150';
+        document.getElementById('existingSparkle1').value = hero.sparkle_image_1 || 'https://via.placeholder.com/50';
+        document.getElementById('existingSparkle2').value = hero.sparkle_image_2 || 'https://via.placeholder.com/50';
+        document.getElementById('heroPreviewTitle').textContent = hero.title || 'Welcome to Deeken';
+        document.getElementById('heroPreviewDescription').textContent = hero.description || 'Discover our amazing products.';
+        document.getElementById('heroPreviewButton').textContent = hero.button_text || 'Shop Now';
+        document.getElementById('heroPreviewMainImage').src = hero.main_image || 'https://via.placeholder.com/150';
+        document.getElementById('heroPreviewSparkle1').src = hero.sparkle_image_1 || 'https://via.placeholder.com/50';
+        document.getElementById('heroPreviewSparkle2').src = hero.sparkle_image_2 || 'https://via.placeholder.com/50';
+    } catch (error) {
+        showAlert('Failed to fetch hero section: ' + error.message, 'error');
+        console.error('Fetch hero section error:', error);
+    }
+}
 
+document.getElementById('heroSectionForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const button = e.target.querySelector('button[type="submit"]');
+    button.classList.add('btn-loading');
+    button.disabled = true;
+    const data = {
+        action: 'update_hero_section',
+        title: document.getElementById('heroTitle').value,
+        description: document.getElementById('heroDescription').value,
+        button_text: document.getElementById('heroButtonText').value,
+        existing_main_image: document.getElementById('existingMainImage').value,
+        existing_sparkle_1: document.getElementById('existingSparkle1').value,
+        existing_sparkle_2: document.getElementById('existingSparkle2').value,
+    };
+    
+    // Add files only if selected
+    const mainImage = document.getElementById('heroMainImage').files[0];
+    const sparkle1 = document.getElementById('heroSparkleImage1').files[0];
+    const sparkle2 = document.getElementById('heroSparkleImage2').files[0];
+    if (mainImage) data.main_image = mainImage;
+    if (sparkle1) data.sparkle_image_1 = sparkle1;
+    if (sparkle2) data.sparkle_image_2 = sparkle2;
+
+    console.log('Sending hero section data:', Object.keys(data)); // Debug form data
+    try {
+        const response = await sendAjaxRequest(data);
+        console.log('Hero section update response:', response); // Debug response
+        if (response.success) {
+            showAlert(response.message, 'success');
+            fetchHeroSection();
+            // Reset file inputs
+            document.getElementById('heroMainImage').value = '';
+            document.getElementById('heroSparkleImage1').value = '';
+            document.getElementById('heroSparkleImage2').value = '';
+        } else {
+            showAlert(response.message || 'Unknown error occurred.', 'error');
+        }
+    } catch (error) {
+        showAlert('Failed to update hero section: ' + error.message, 'error');
+        console.error('Hero section update error:', error);
+    } finally {
+        button.classList.remove('btn-loading');
+        button.disabled = false;
+    }
+});
         // Initialize
-        fetchOrders();
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => switchTab(link.dataset.tab));
+        });
+        fetchHeroSection();
     </script>
 </body>
 </html>
