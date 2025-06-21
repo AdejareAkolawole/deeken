@@ -1,7 +1,7 @@
 <?php
 // ----- INITIALIZATION -----
 include 'config.php';
-
+include 'header.php'; // Include header.php for consistent navigation
 
 // Enable error reporting for debugging (remove in production)
 ini_set('display_errors', 1);
@@ -17,8 +17,6 @@ if (isset($_SESSION['user_id'])) {
     $user = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 }
-
-
 
 // Get cart count
 $cart_count = getCartCount($conn, $user);
@@ -129,6 +127,7 @@ while ($row = $stats_result->fetch_assoc()) {
     <link rel="stylesheet" href="global.css">
     <link rel="stylesheet" href="hamburger.css">
     <style>
+        /* Page-specific styles */
         * {
             margin: 0;
             padding: 0;
@@ -141,280 +140,9 @@ while ($row = $stats_result->fetch_assoc()) {
             color: #333;
             background: linear-gradient(135deg, #FFFFFF, #F6F6F6);
             min-height: 100vh;
-            padding-top: 80px;
-        }
-
-        /* Navigation Styles (from cart.php) */
-        .navbar {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            transform: translateY(0);
-            transition: transform 0.3s ease-in-out, box-shadow 0.3s ease;
-        }
-
-        .navbar.navbar-hidden {
-            transform: translateY(-100%);
-        }
-
-        .navbar.navbar-visible {
-            transform: translateY(0);
-            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
-        }
-
-        .logo {
-            font-size: 1.8rem;
-            font-weight: 600;
-            color: #2A2AFF;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            transition: all 0.3s ease;
-        }
-
-        .logo:hover {
-            transform: scale(1.05);
-            color: #1A1AFF;
-        }
-
-        .logo i {
-            font-size: 1.6rem;
-            background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .search-bar {
-            display: flex;
-            flex: 1;
-            max-width: 500px;
-            margin: 0 2rem;
-            position: relative;
-        }
-
-        .search-bar input {
-            flex: 1;
-            padding: 12px 20px;
-            border: 2px solid #e0e0e0;
-            border-radius: 50px;
-            font-family: 'Poppins', sans-serif;
-            font-size: 14px;
-            outline: none;
-            transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.9);
-        }
-
-        .search-bar input:focus {
-            border-color: #2A2AFF;
-            box-shadow: 0 0 0 3px rgba(42, 42, 255, 0.1);
-            transform: translateY(-1px);
-        }
-
-        .search-bar button {
-            background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
-            border: none;
-            padding: 12px 20px;
-            border-radius: 50px;
-            color: white;
-            cursor: pointer;
-            margin-left: -50px;
-            z-index: 1;
-            transition: all 0.3s ease;
-            font-size: 14px;
-        }
-
-        .search-bar button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 15px rgba(42, 42, 255, 0.3);
-        }
-
-        .nav-right {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-        }
-
-        .cart-link {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            text-decoration: none;
-            color: #333;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 25px;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .cart-link:hover {
-            background: rgba(42, 42, 255, 0.1);
-            color: #2A2AFF;
-        }
-
-        .cart-count {
-            background: #FF6B35;
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 600;
-            margin-left: -5px;
-        }
-
-        .profile-dropdown {
-            position: relative;
-        }
-
-        .profile-trigger {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            border: 1px solid #e0e0e0;
-            background: white;
-        }
-
-        .profile-trigger:hover {
-            background: #f8f9fa;
-            border-color: #2A2AFF;
-        }
-
-        .profile-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #2A2AFF, #BDF3FF);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 16px;
-        }
-
-        .profile-info {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .profile-greeting {
-            font-size: 12px;
-            color: #666;
-            line-height: 1.2;
-        }
-
-        .profile-account {
-            font-size: 14px;
-            font-weight: 500;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
-            line-height: 1.2;
-        }
-
-        .profile-account i {
-            font-size: 10px;
-            transition: transform 0.3s ease;
-        }
-
-        .profile-dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-            min-width: 220px;
-            z-index: 1001;
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: all 0.3s ease;
-            margin-top: 5px;
-        }
-
-        .profile-dropdown-menu.show {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .profile-dropdown-menu a {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 12px 16px;
-            text-decoration: none;
-            color: #333;
-            font-size: 14px;
-            font-weight: 400;
-            transition: all 0.3s ease;
-            border-radius: 8px;
-            margin: 4px 8px;
-        }
-
-        .profile-dropdown-menu a:hover {
-            background: rgba(42, 42, 255, 0.1);
-            color: #2A2AFF;
-        }
-
-        .profile-dropdown-menu a i {
-            width: 16px;
-            color: #666;
-        }
-
-        .dropdown-divider {
-            border: none;
-            height: 1px;
-            background: #e0e0e0;
-            margin: 8px 16px;
-        }
-
-        .hamburger {
-            display: none;
-        }
-
-        @media (max-width: 768px) {
-            .navbar {
-                padding: 0.8rem 1rem;
-            }
             
-            body {
-                padding-top: 70px;
-            }
-
-            .nav-right {
-                gap: 1rem;
-            }
-
-            .search-bar {
-                display: none;
-            }
         }
 
-        /* Existing orders.php styles (unchanged) */
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -490,7 +218,8 @@ while ($row = $stats_result->fetch_assoc()) {
             color: #555;
         }
 
-        .filter-group select {
+        .filter-group select,
+        .filter-group input[type="date"] {
             padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 6px;
@@ -692,7 +421,7 @@ while ($row = $stats_result->fetch_assoc()) {
 
         .item-price {
             font-weight: 600;
-            color: #2A2AFF;
+            color: #2A2aff;
             font-size: 1.1rem;
         }
 
@@ -866,16 +595,6 @@ while ($row = $stats_result->fetch_assoc()) {
             gap: 1rem;
             margin-bottom: 1rem;
         }
-        .notification-dot {
-    display: inline-block;
-    background-color: red;
-    color: white;
-    border-radius: 50%;
-    padding: 2px 6px;
-    font-size: 12px;
-    margin-left: 5px;
-    vertical-align: middle;
-}
 
         .social-links a {
             color: white;
@@ -922,108 +641,9 @@ while ($row = $stats_result->fetch_assoc()) {
             text-decoration: none;
             font-size: 14px;
         }
-        
-        @media (max-width: 768px) {
-            .navbar {
-                padding: 0.01rem 1rem;
-                margin-bottom: 50px;
-            }
-            .logo{
-               position: relative;
-               right: 100px;
-               bottom: 40px;
-               
-            }
-            .page-title{
-                margin-top: 70px;
-            }
-            body {
-                padding-top: 70px;
-            }
-
-            .nav-right {
-                gap: 1rem;
-                position: relative;
-                left: 100px;
-                top: 30px
-            }
-
-            .search-bar {
-                display: none;
-            }
-        }
-
     </style>
 </head>
 <body>
-    <header>
-        <nav class="navbar" id="navbar">
-            <a href="index.php" class="logo"><i class="fas fa-store"></i> Deeken</a>
-            <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="Search products..." onkeypress="if(event.key==='Enter') searchProducts()">
-                <button type="button" onclick="searchProducts()"><i class="fas fa-search"></i></button>
-            </div>
-            <div class="nav-right">
-             
-             <div class="profile-dropdown">
-    <?php if ($user): ?>
-        <?php
-        // Check for unread notifications
-        require_once 'config.php'; // Include database connection
-        $unread_count = 0;
-        $stmt = $conn->prepare("SELECT COUNT(*) as unread FROM notifications WHERE user_id = ? AND is_read = 0");
-        $stmt->bind_param("i", $user['id']);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $unread_count = $result->fetch_assoc()['unread'];
-        $stmt->close();
-        ?>
-        <div class="profile-trigger" onclick="toggleProfileDropdown()">
-            <div class="profile-avatar">
-                <i class="fas fa-user"></i>
-            </div>
-            <div class="profile-info">
-                <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
-                <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
-            </div>
-        </div>
-        <div class="profile-dropdown-menu" id="profileDropdown">
-            <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-            <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
-            <a href="inbox.php">
-                <i class="fas fa-inbox"></i> Inbox
-                <?php if ($unread_count > 0): ?>
-                    <span class="notification-dot"><?php echo $unread_count; ?></span>
-                <?php endif; ?>
-            </a>
-            <a href="index.php"><i class="fas fa-heart"></i> Home</a>
-            <?php if (!empty($user['is_admin'])): ?>
-                <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
-            <?php endif; ?>
-            <hr class="dropdown-divider">
-            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-        </div>
-    <?php else: ?>
-        <div class="profile-trigger" onclick="toggleProfileDropdown()">
-            <div class="profile-avatar">
-                <i class="fas fa-user"></i>
-            </div>
-            <div class="profile-info">
-                <span class="profile-greeting">Hi, Guest</span>
-                <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
-            </div>
-        </div>
-        <div class="profile-dropdown-menu" id="profileDropdown">
-            <a href="login.php"><i class="fas fa-sign-in"></i> Sign In</a>
-            <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
-            <hr class="dropdown-divider">
-            <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
-        </div>
-    <?php endif; ?>
-</div>
-        </nav>
-    </header>
-
     <main>
         <div class="container">
             <div class="page-header">
@@ -1189,7 +809,7 @@ while ($row = $stats_result->fetch_assoc()) {
                 <?php if ($total_pages > 1): ?>
                     <div class="pagination">
                         <?php if ($page > 1): ?>
-                            <a href="?page=<?php echo $page - 1; ?>&status=<?php echo urlencode($status_filter); ?>&date=<?php echo urlencode($date_filter); ?>">&laquo; Previous</a>
+                            <a href="?page=<?php echo $page - 1; ?>&status=<?php echo urlencode($status_filter); ?>&date=<?php echo urlencode($date_filter); ?>">« Previous</a>
                         <?php endif; ?>
                         <?php for ($i = 1; $i <= $total_pages; $i++): ?>
                             <?php if ($i == $page): ?>
@@ -1199,7 +819,7 @@ while ($row = $stats_result->fetch_assoc()) {
                             <?php endif; ?>
                         <?php endfor; ?>
                         <?php if ($page < $total_pages): ?>
-                            <a href="?page=<?php echo $page + 1; ?>&status=<?php echo urlencode($status_filter); ?>&date=<?php echo urlencode($date_filter); ?>">Next &raquo;</a>
+                            <a href="?page=<?php echo $page + 1; ?>&status=<?php echo urlencode($status_filter); ?>&date=<?php echo urlencode($date_filter); ?>">Next »</a>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
@@ -1207,73 +827,55 @@ while ($row = $stats_result->fetch_assoc()) {
         </div>
     </main>
 
-     <div class="footer-bottom">
-            <p>Deeken © 2025, All Rights Reserved</p>
-            <div class="payment-icons">
-                <div class="payment-icon">💳</div>
-                <div class="payment-icon">🏦</div>
-                <div class="payment-icon">📱</div>
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>About Deeken</h3>
+                <ul>
+                    <li><a href="about.php">Our Story</a></li>
+                    <li><a href="careers.php">Careers</a></li>
+                    <li><a href="press.php">Press</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3>Customer Service</h3>
+                <ul>
+                    <li><a href="help.php">Help Center</a></li>
+                    <li><a href="returns.php">Returns</a></li>
+                    <li><a href="shipping.php">Shipping Info</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3>Follow Us</h3>
+                <div class="social-links">
+                    <a href="#"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-instagram"></i></a>
+                </div>
+                <div class="contact-info">
+                    <p><i class="fas fa-envelope"></i> support@deeken.com</p>
+                    <p><i class="fas fa-phone"></i> +1-800-555-1234</p>
+                </div>
             </div>
         </div>
+        <div class="footer-bottom">
+            <div class="footer-bottom-content">
+                <p>Deeken © 2025, All Rights Reserved</p>
+                <div class="payment-icons">
+                    <div class="payment-icon">💳</div>
+                    <div class="payment-icon">🏦</div>
+                    <div class="payment-icon">📱</div>
+                </div>
+                <div class="footer-links">
+                    <a href="privacy.php">Privacy Policy</a>
+                    <a href="terms.php">Terms of Service</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
     <script src="hamburger.js"></script>
     <script src="utils.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Toggle profile dropdown
-            function toggleProfileDropdown() {
-                const dropdown = document.getElementById('profileDropdown');
-                if (dropdown) {
-                    dropdown.classList.toggle('show');
-                    console.log('Dropdown toggled:', dropdown.classList.contains('show') ? 'visible' : 'hidden');
-                } else {
-                    console.error('Profile dropdown element not found');
-                }
-            }
-
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(event) {
-                const profileDropdown = document.querySelector('.profile-dropdown');
-                const dropdown = document.getElementById('profileDropdown');
-                if (profileDropdown && dropdown && !profileDropdown.contains(event.target)) {
-                    dropdown.classList.remove('show');
-                }
-            });
-
-            // Ensure the toggle function is globally available
-            window.toggleProfileDropdown = toggleProfileDropdown;
-
-            // Navbar scroll hide/show functionality
-            let lastScrollTop = 0;
-            const navbar = document.getElementById('navbar');
-            const scrollThreshold = 100;
-            if (navbar) {
-                window.addEventListener('scroll', function() {
-                    const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-                    if (currentScroll < scrollThreshold) {
-                        navbar.classList.remove('navbar-hidden');
-                        navbar.classList.add('navbar-visible');
-                        return;
-                    }
-                    if (currentScroll > lastScrollTop && currentScroll > scrollThreshold) {
-                        navbar.classList.add('navbar-hidden');
-                        navbar.classList.remove('navbar-visible');
-                    } else if (currentScroll < lastScrollTop) {
-                        navbar.classList.remove('navbar-hidden');
-                        navbar.classList.add('navbar-visible');
-                    }
-                    lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
-                });
-            }
-
-            // Search products
-            function searchProducts() {
-                const search = document.getElementById('searchInput').value.trim();
-                if (search) {
-                    window.location.href = `index.php?search=${encodeURIComponent(search)}`;
-                }
-            }
-        });
-    </script>
 </body>
 </html>
 <?php

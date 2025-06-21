@@ -1,10 +1,6 @@
 <?php
 require_once 'config.php';
 
-// Get current user and cart count
-$user = getCurrentUser();
-$cartCount = getCartCount($conn, $user);
-
 // Fetch categories for navigation
 $categories_query = "SELECT * FROM categories ORDER BY name";
 $categories_result = $conn->query($categories_query);
@@ -13,24 +9,10 @@ while ($row = $categories_result->fetch_assoc()) {
     $categories[] = $row;
 }
 
-// Fetch notifications for the user
-$notifications = [];
-$unread_count = 0;
-if ($user) {
-    $notifications_query = $conn->prepare("SELECT id, message, type, order_id, is_read, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10");
-    $notifications_query->bind_param("i", $user['id']);
-    $notifications_query->execute();
-    $result = $notifications_query->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $notifications[] = $row;
-        if (!$row['is_read']) {
-            $unread_count++;
-        }
-    }
-    $notifications_query->close();
-}
+// Fetch Hero Section data
+$hero_section = $conn->query("SELECT title, description, button_text, main_image, sparkle_image_1, sparkle_image_2 FROM hero_section LIMIT 1")->fetch_assoc() ?? [];
 
-// Fetch featured/new arrival products with stock
+// Fetch new arrivals and top selling products
 $new_arrivals_query = "SELECT p.*, c.name as category_name, 
                        COALESCE(AVG(r.rating), 0) AS avg_rating,
                        COUNT(r.id) AS review_count,
@@ -44,10 +26,6 @@ $new_arrivals_query = "SELECT p.*, c.name as category_name,
                        LIMIT 4";
 $new_arrivals = $conn->query($new_arrivals_query);
 
-// In index.php, fetch Hero Section data
-$hero_section = $conn->query("SELECT title, description, button_text, main_image, sparkle_image_1, sparkle_image_2 FROM hero_section LIMIT 1")->fetch_assoc() ?? [];
-
-// Fetch top selling products with stock
 $top_selling_query = "SELECT p.*, c.name as category_name,
                        COALESCE(AVG(r.rating), 0) AS avg_rating,
                        COUNT(r.id) AS review_count,
@@ -65,7 +43,7 @@ $top_selling_query = "SELECT p.*, c.name as category_name,
                        LIMIT 4";
 $top_selling = $conn->query($top_selling_query);
 
-// Fetch customer testimonials
+// Fetch testimonials
 $testimonials_query = "SELECT r.review_text, r.rating, u.full_name, r.created_at 
                       FROM reviews r 
                       JOIN users u ON r.user_id = u.id 
@@ -85,7 +63,6 @@ if ($_POST['action'] ?? '' === 'add_to_cart') {
     $quantity = intval($_POST['quantity'] ?? 1);
     
     if ($product_id > 0) {
-        // Check if product exists and has stock
         $product_check = $conn->prepare("SELECT p.*, i.stock_quantity FROM products p LEFT JOIN inventory i ON p.id = i.product_id WHERE p.id = ?");
         $product_check->bind_param("i", $product_id);
         $product_check->execute();
@@ -93,7 +70,6 @@ if ($_POST['action'] ?? '' === 'add_to_cart') {
         $product_check->close();
         
         if ($product && ($product['stock_quantity'] > 0 || $product['stock_quantity'] === null)) {
-            // Check if item already in cart
             $cart_check = $conn->prepare("SELECT quantity FROM cart WHERE user_id = ? AND product_id = ?");
             $cart_check->bind_param("ii", $user['id'], $product_id);
             $cart_check->execute();
@@ -101,14 +77,12 @@ if ($_POST['action'] ?? '' === 'add_to_cart') {
             $cart_check->close();
             
             if ($existing) {
-                // Update quantity
                 $new_quantity = $existing['quantity'] + $quantity;
                 $update_cart = $conn->prepare("UPDATE cart SET quantity = ?, updated_at = NOW() WHERE user_id = ? AND product_id = ?");
                 $update_cart->bind_param("iii", $new_quantity, $user['id'], $product_id);
                 $success = $update_cart->execute();
                 $update_cart->close();
             } else {
-                // Add new item
                 $add_cart = $conn->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
                 $add_cart->bind_param("iii", $user['id'], $product_id, $quantity);
                 $success = $add_cart->execute();
@@ -130,25 +104,6 @@ if ($_POST['action'] ?? '' === 'add_to_cart') {
     exit;
 }
 
-// Handle marking notification as read
-if ($_POST['action'] ?? '' === 'mark_notification_read') {
-    if ($user) {
-        $notification_id = intval($_POST['notification_id'] ?? 0);
-        if ($notification_id > 0) {
-            $stmt = $conn->prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?");
-            $stmt->bind_param("ii", $notification_id, $user['id']);
-            $stmt->execute();
-            $stmt->close();
-            echo json_encode(['success' => true]);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Invalid notification ID']);
-        }
-    } else {
-        echo json_encode(['success' => false, 'message' => 'User not logged in']);
-    }
-    exit;
-}
-
 // Function to display star rating
 function displayStars($rating) {
     $stars = '';
@@ -162,6 +117,9 @@ function displayStars($rating) {
     return $stars;
 }
 ?>
+
+<?php include 'header.php'; ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -173,32 +131,33 @@ function displayStars($rating) {
     <link rel="stylesheet" href="assets/css/index.css">
     <link rel="stylesheet" href="responsive-index.css">
     <style>
-   /* Notification styles */
-.notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 15px 20px;
-    border-radius: 5px;
-    color: white;
-    font-weight: 500;
-    z-index: 3000; /* Increased to ensure it appears above navbar and marquee */
-    opacity: 0;
-    transform: translateX(100%);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-    min-width: 300px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-}
-.notification.success {
-    background-color: #28a745;
-}
-.notification.error {
-    background-color: #dc3545;
-}
-.notification.show {
-    opacity: 1;
-    transform: translateX(0);
-}
+        /* Notification styles */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 5px;
+            color: white;
+            font-weight: 500;
+            z-index: 3000;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            min-width: 300px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .notification.success {
+            background-color: #28a745;
+        }
+        .notification.error {
+            background-color: #dc3545;
+        }
+        .notification.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
         /* Login prompt styles */
         .login-prompt {
             background: rgba(0,0,0,0.8);
@@ -365,74 +324,6 @@ function displayStars($rating) {
             color: #007bff;
         }
 
-        /* Notification dropdown styles */
-        .notification-dropdown {
-            position: relative;
-            display: inline-block;
-        }
-        .notification-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            position: relative;
-            padding: 10px;
-        }
-        .notification-badge {
-            position: absolute;
-            top: 0;
-            right: 0;
-            background: #ff6f61;
-            color: white;
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .notification-dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            min-width: 300px;
-            max-height: 400px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .notification-dropdown-menu.active {
-            display: block;
-        }
-        .notification-item {
-            padding: 15px;
-            border-bottom: 1px solid #f5f5f5;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-        }
-        .notification-item.unread {
-            background: #f9f9f9;
-        }
-        .notification-item:hover {
-            background: #f5f5f5;
-        }
-        .notification-icon {
-            margin-right: 10px;
-            font-size: 18px;
-        }
-        .notification-content {
-            flex: 1;
-        }
-        .notification-time {
-            font-size: 12px;
-            color: #666;
-        }
-
         /* Product grid styles */
         .new-arrivals-grid, .top-selling-grid {
             padding: 0 5%;
@@ -532,16 +423,6 @@ function displayStars($rating) {
             font-weight: 700;
             margin-bottom: 10px;
         }
-        .notification-dot {
-    display: inline-block;
-    background-color: red;
-    color: white;
-    border-radius: 50%;
-    padding: 2px 6px;
-    font-size: 12px;
-    margin-left: 5px;
-    vertical-align: middle;
-}
         .original-price {
             font-size: 14px;
             color: var(--text-gray, #666);
@@ -595,38 +476,11 @@ function displayStars($rating) {
             .search-bar .fa-search {
                 right: 10px;
             }
-            .nav-icons .cart-btn {
+            .nav-right .cart-link .cart-text {
                 display: none;
             }
-            .hamburger-menu {
+            .hamburger {
                 display: block;
-                cursor: pointer;
-                font-size: 24px;
-                padding: 10px;
-            }
-            .mobile-menu {
-                display: none;
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                background: white;
-                border: 1px solid #ddd;
-                z-index: 1000;
-                padding: 20px;
-            }
-            .mobile-menu.active {
-                display: block;
-            }
-            .mobile-menu a {
-                display: block;
-                padding: 10px 0;
-                color: #333;
-                text-decoration: none;
-                font-size: 16px;
-            }
-            .mobile-menu a:hover {
-                color: #ff6f61;
             }
         }
 
@@ -646,9 +500,6 @@ function displayStars($rating) {
             }
             .add-to-cart-btn {
                 padding: 10px 20px;
-            }
-            .hamburger-menu {
-                display: none;
             }
         }
         @media (min-width: 1024px) {
@@ -673,7 +524,7 @@ function displayStars($rating) {
 <body>
     <!-- Notification System -->
     <div id="notification" class="notification"></div>
-    
+
     <!-- Login Prompt Modal -->
     <div id="loginPrompt" class="login-prompt">
         <div class="modal">
@@ -698,128 +549,6 @@ function displayStars($rating) {
         </div>
         <button class="close-btn" onclick="closeBanner()">×</button>
     </div>
-
-    <!-- Navigation -->
-    <nav class="navbar">
-        <div class="logo">Deeken</div>
-        <div class="search-bar" id="searchBar">
-            <i class="fas fa-search" id="searchIcon"></i>
-            <input type="text" placeholder="Search for products..." id="searchInput">
-            <div class="autocomplete-suggestions" id="autocompleteSuggestions"></div>
-        </div>
-        <div class="nav-icons">
-         <div class="notification-dropdown">
-    <button class="notification-btn" title="Notifications" onclick="toggleNotificationDropdown()">
-        <i class="fas fa-bell"></i>
-        <?php if ($unread_count > 0): ?>
-            <span class="notification-badge"><?php echo $unread_count; ?></span>
-        <?php endif; ?>
-    </button>
-    <div class="notification-dropdown-menu" id="notificationDropdown">
-        <?php if (empty($notifications)): ?>
-            <div class="notification-item">No notifications</div>
-        <?php else: ?>
-            <?php foreach ($notifications as $notification): ?>
-                <div class="notification-item <?php echo !$notification['is_read'] ? 'unread' : ''; ?>" 
-                     data-notification-id="<?php echo $notification['id']; ?>" 
-                     onclick="markNotificationRead(<?php echo $notification['id']; ?>, '<?php echo $notification['type']; ?>', <?php echo $notification['order_id'] ?: 'null'; ?>)">
-                    <i class="fas fa-<?php 
-                        switch ($notification['type']) {
-                            case 'order_received': echo 'check-circle'; break;
-                            case 'ready_to_ship': echo 'box'; break;
-                            case 'shipped': echo 'truck'; break;
-                            case 'cart_added': echo 'shopping-cart'; break;
-                            default: echo 'bell';
-                        }
-                    ?> notification-icon"></i>
-                    <div class="notification-content">
-                        <p><?php echo htmlspecialchars($notification['message']); ?></p>
-                        <span class="notification-time"><?php echo date('M d, Y H:i', strtotime($notification['created_at'])); ?></span>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
-    </div>
-</div>
-            <button class="cart-btn" title="Shopping Cart" onclick="window.location.href='cart.php'">
-                <i class="fas fa-shopping-cart"></i>
-                <span class="cart-badge" id="cartBadge"><?php echo $cartCount; ?></span>
-            </button>
-           
-            <!-- Profile Dropdown -->
-                <div class="profile-dropdown">
-    <?php if ($user): ?>
-        <?php
-        // Check for unread notifications
-        require_once 'config.php'; // Include database connection
-        $unread_count = 0;
-        $stmt = $conn->prepare("SELECT COUNT(*) as unread FROM notifications WHERE user_id = ? AND is_read = 0");
-        $stmt->bind_param("i", $user['id']);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $unread_count = $result->fetch_assoc()['unread'];
-        $stmt->close();
-        ?>
-        <div class="profile-trigger" onclick="toggleProfileDropdown()">
-            <div class="profile-avatar">
-                <i class="fas fa-user"></i>
-            </div>
-            <div class="profile-info">
-                <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
-                <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
-            </div>
-        </div>
-        <div class="profile-dropdown-menu" id="profileDropdown">
-            <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-            <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
-            <a href="inbox.php">
-                <i class="fas fa-inbox"></i> Inbox
-                <?php if ($unread_count > 0): ?>
-                    <span class="notification-dot"><?php echo $unread_count; ?></span>
-                <?php endif; ?>
-            </a>
-            <a href="index.php"><i class="fas fa-heart"></i> Home</a>
-            <?php if (!empty($user['is_admin'])): ?>
-                <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
-            <?php endif; ?>
-            <hr class="dropdown-divider">
-            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-        </div>
-    <?php else: ?>
-        <div class="profile-trigger" onclick="toggleProfileDropdown()">
-            <div class="profile-avatar">
-                <i class="fas fa-user"></i>
-            </div>
-            <div class="profile-info">
-                <span class="profile-greeting">Hi, Guest</span>
-                <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
-            </div>
-        </div>
-        <div class="profile-dropdown-menu" id="profileDropdown">
-            <a href="login.php"><i class="fas fa-sign-in"></i> Sign In</a>
-            <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
-            <hr class="dropdown-divider">
-            <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
-        </div>
-    <?php endif; ?>
-</div>
-            </div>
-        </div>
-        <!-- Mobile Menu -->
-        <div class="mobile-menu" id="mobileMenu">
-            <a href="index.php"><i class="fas fa-home"></i> Home</a>
-            <a href="shop.php"><i class="fas fa-store"></i> Shop</a>
-            <a href="cart.php"><i class="fas fa-shopping-cart"></i> Cart <span class="cart-badge"><?php echo $cartCount; ?></span></a>
-            <a href="orders.php"><i class="fas fa-box"></i> Orders</a>
-            <?php if ($user): ?>
-                <a href="profile.php"><i class="fas fa-user"></i> Profile</a>
-                <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-            <?php else: ?>
-                <a href="login.php"><i class="fas fa-sign-in"></i> Sign In</a>
-                <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
-            <?php endif; ?>
-        </div>
-    </nav>
 
     <!-- Hero Section -->
     <section class="hero">
@@ -870,7 +599,7 @@ function displayStars($rating) {
         <h2 class="section-title">New Arrivals</h2>
         <div class="new-arrivals-grid product-grid">
             <div class="scroll-container">
-                <button class="scroll-btn left" onclick="scrollContainer('new-arrivals', -1)">&lt;</button>
+                <button class="scroll-btn left" onclick="scrollContainer('new-arrivals', -1)"><</button>
                 <?php
                 $new_arrivals->data_seek(0);
                 while ($product = $new_arrivals->fetch_assoc()):
@@ -905,11 +634,11 @@ function displayStars($rating) {
                                 <span class="stars"><?php echo displayStars($avg_rating); ?></span>
                                 <span class="rating-text"><?php echo $avg_rating; ?> (<?php echo $review_count; ?> reviews)</span>
                             </div>
-                            <button class="add-to-cart-btn" onclick="addToCart(<?php echo $product['id']; ?>)" <?php echo $stock == 0 ? 'disabled' : ''; ?>>Add to Cart</button>
+                           
                         </div>
                     </div>
                 <?php endwhile; ?>
-                <button class="scroll-btn right" onclick="scrollContainer('new-arrivals', 1)">&gt;</button>
+                <button class="scroll-btn right" onclick="scrollContainer('new-arrivals', 1)">></button>
             </div>
         </div>
         <div class="view-all">
@@ -922,7 +651,7 @@ function displayStars($rating) {
         <h2 class="section-title">Top Selling</h2>
         <div class="top-selling-grid product-grid">
             <div class="scroll-container">
-                <button class="scroll-btn left" onclick="scrollContainer('top-selling', -1)">&lt;</button>
+                <button class="scroll-btn left" onclick="scrollContainer('top-selling', -1)"><</button>
                 <?php
                 $top_selling->data_seek(0);
                 while ($product = $top_selling->fetch_assoc()):
@@ -957,11 +686,11 @@ function displayStars($rating) {
                                 <span class="stars"><?php echo displayStars($avg_rating); ?></span>
                                 <span class="rating-text"><?php echo $avg_rating; ?> (<?php echo $review_count; ?> reviews)</span>
                             </div>
-                            <button class="add-to-cart-btn" onclick="addToCart(<?php echo $product['id']; ?>)" <?php echo $stock == 0 ? 'disabled' : ''; ?>>Add to Cart</button>
+
                         </div>
                     </div>
                 <?php endwhile; ?>
-                <button class="scroll-btn right" onclick="scrollContainer('top-selling', 1)">&gt;</button>
+                <button class="scroll-btn right" onclick="scrollContainer('top-selling', 1)">></button>
             </div>
         </div>
         <div class="view-all">
@@ -1022,62 +751,62 @@ function displayStars($rating) {
     </section>
 
     <!-- Footer -->
-   <footer class="footer">
-    <div class="footer-content">
-        <div class="footer-brand">
-            <h3>DEEKEN</h3>
-            <p>We have clothes that suits your style and which you're proud to wear. From women to men.</p>
-            <div class="social-icons">
-                <div class="social-icon">f</div>
-                <div class="social-icon">t</div>
-                <div class="social-icon">in</div>
-                <div class="social-icon">ig</div>
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <h3>DEEKEN</h3>
+                <p>We have clothes that suits your style and which you're proud to wear. From women to men.</p>
+                <div class="social-icons">
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+            </div>
+            <div class="footer-column">
+                <h4>Company</h4>
+                <ul>
+                    <li><a href="unified.php?page=about">About</a></li>
+                    <li><a href="unified.php?page=contact">Contact</a></li>
+                    <li><a href="unified.php?page=careers">Careers</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Help</h4>
+                <ul>
+                    <li><a href="unified.php?page=support">Customer Support</a></li>
+                    <li><a href="unified.php?page=shipping">Delivery Details</a></li>
+                    <li><a href="unified.php?page=terms">Terms & Conditions</a></li>
+                    <li><a href="unified.php?page=privacy">Privacy Policy</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>FAQ</h4>
+                <ul>
+                    <li><a href="unified.php?page=faq&section=account">Account</a></li>
+                    <li><a href="unified.php?page=faq&section=delivery">Manage Deliveries</a></li>
+                    <li><a href="unified.php?page=faq&section=orders">Orders</a></li>
+                    <li><a href="unified.php?page=faq&section=payments">Payments</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="unified.php?page=blog">Blog</a></li>
+                    <li><a href="unified.php?page=size-guide">Size Guide</a></li>
+                    <li><a href="unified.php?page=care-instructions">Care Instructions</a></li>
+                </ul>
             </div>
         </div>
-        <div class="footer-column">
-            <h4>Company</h4>
-            <ul>
-                <li><a href="unified.php?page=about">About</a></li>
-                <li><a href="unified.php?page=contact">Contact</a></li>
-                <li><a href="unified.php?page=careers">Careers</a></li>
-            </ul>
+        <div class="footer-bottom">
+            <p>Deeken © 2025, All Rights Reserved</p>
+            <div class="payment-icons">
+                <div class="payment-icon">💳</div>
+                <div class="payment-icon">🏦</div>
+                <div class="payment-icon">📱</div>
+            </div>
         </div>
-        <div class="footer-column">
-            <h4>Help</h4>
-            <ul>
-                <li><a href="unified.php?page=support">Customer Support</a></li>
-                <li><a href="unified.php?page=shipping">Delivery Details</a></li>
-                <li><a href="unified.php?page=terms">Terms & Conditions</a></li>
-                <li><a href="unified.php?page=privacy">Privacy Policy</a></li>
-            </ul>
-        </div>
-        <div class="footer-column">
-            <h4>FAQ</h4>
-            <ul>
-                <li><a href="unified.php?page=faq&section=account">Account</a></li>
-                <li><a href="unified.php?page=faq&section=delivery">Manage Deliveries</a></li>
-                <li><a href="unified.php?page=faq&section=orders">Orders</a></li>
-                <li><a href="unified.php?page=faq&section=payments">Payments</a></li>
-            </ul>
-        </div>
-        <div class="footer-column">
-            <h4>Resources</h4>
-            <ul>
-                <li><a href="unified.php?page=blog">Blog</a></li>
-                <li><a href="unified.php?page=size-guide">Size Guide</a></li>
-                <li><a href="unified.php?page=care-instructions">Care Instructions</a></li>
-            </ul>
-        </div>
-    </div>
-    <div class="footer-bottom">
-        <p>Deeken © 2025, All Rights Reserved</p>
-        <div class="payment-icons">
-            <div class="payment-icon">💳</div>
-            <div class="payment-icon">🏦</div>
-            <div class="payment-icon">📱</div>
-        </div>
-    </div>
-</footer>
+    </footer>
 
     <script>
         const isLoggedIn = <?php echo $user ? 'true' : 'false'; ?>;
@@ -1128,7 +857,9 @@ function displayStars($rating) {
 
                 if (data.success) {
                     showNotification(data.message, 'success');
-                    document.getElementById('cartBadge').textContent = data.cartCount;
+                    document.querySelectorAll('.cart-count').forEach(badge => {
+                        badge.textContent = data.cartCount;
+                    });
                 } else {
                     showNotification(data.message, 'error');
                 }
@@ -1138,57 +869,10 @@ function displayStars($rating) {
             }
         }
 
-        // Notification dropdown toggle
-        function toggleNotificationDropdown() {
-            const dropdown = document.getElementById('notificationDropdown');
-            dropdown.classList.toggle('active');
-        }
-
-        async function markNotificationRead(notificationId, orderId) {
-            try {
-                const formData = new FormData();
-                formData.append('action', 'mark_notification_read');
-                formData.append('notification_id', notificationId);
-
-                const response = await fetch('index.php', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    const item = document.querySelector(`.notification-item[data-notification-id="${notificationId}"]`);
-                    item.classList.remove('unread');
-                    const badge = document.querySelector('.notification-badge');
-                    if (badge) {
-                        let count = parseInt(badge.textContent) - 1;
-                        if (count <= 0) {
-                            badge.remove();
-                        } else {
-                            badge.textContent = count;
-                        }
-                    }
-                    // Redirect to order details
-                    window.location.href = `orders.php?id=${orderId}`;
-                }
-            } catch (error) {
-                console.error('Mark Notification Error:', error);
-            }
-        }
-
-        // Mobile menu toggle
-        function toggleMobileMenu() {
-            const mobileMenu = document.getElementById('mobileMenu');
-            mobileMenu.classList.toggle('active');
-        }
-
         // Search and autocomplete functionality
         const searchBar = document.getElementById('searchBar');
         const searchInput = document.getElementById('searchInput');
-        const searchIcon = document.getElementById('searchIcon');
+        const searchIcon = document.querySelector('.search-bar button');
         const autocompleteSuggestions = document.getElementById('autocompleteSuggestions');
 
         function highlightMatch(text, query) {
@@ -1209,11 +893,12 @@ function displayStars($rating) {
             }
         });
 
-        searchIcon.addEventListener('click', function() {
+        searchIcon.addEventListener('click', function(event) {
             if (window.innerWidth <= 767) {
                 searchBar.classList.toggle('active');
                 if (searchBar.classList.contains('active')) {
                     searchInput.focus();
+                    event.preventDefault();
                 }
             } else {
                 performSearch();
@@ -1267,26 +952,6 @@ function displayStars($rating) {
                 if (window.innerWidth <= 767) {
                     searchBar.classList.remove('active');
                 }
-            }
-        });
-
-        // Profile dropdown toggle
-        function toggleProfileDropdown() {
-            const dropdown = document.getElementById('profileDropdown');
-            dropdown.classList.toggle('active');
-        }
-
-        // Close dropdown on outside click
-        document.addEventListener('click', function(event) {
-            const dropdown = document.getElementById('profileDropdown');
-            const trigger = document.querySelector('.profile-trigger');
-            const notificationDropdown = document.getElementById('notificationDropdown');
-            const notificationTrigger = document.querySelector('.notification-btn');
-            if (!trigger.contains(event.target) && !dropdown.contains(event.target)) {
-                dropdown.classList.remove('active');
-            }
-            if (!notificationTrigger.contains(event.target) && !notificationDropdown.contains(event.target)) {
-                notificationDropdown.classList.remove('active');
             }
         });
 
@@ -1355,3 +1020,6 @@ function displayStars($rating) {
     </script>
 </body>
 </html>
+<?php
+$conn->close();
+?>

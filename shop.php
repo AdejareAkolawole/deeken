@@ -194,7 +194,7 @@ if ($_POST['action'] ?? '' === 'add_to_cart') {
             if ($success) {
                 $newCartCount = getCartCount($conn, $user);
                 echo json_encode(['success' => true, 'message' => 'Item added to cart!', 'cartCount' => $newCartCount]);
-            } else {
+} else {
                 echo json_encode(['success' => false, 'message' => 'Failed to add item to cart.']);
             }
         } else {
@@ -1154,66 +1154,68 @@ function displayStars($rating) {
                     </button>
                 </div>
             <?php endif; ?>
-           <div class="profile-dropdown">
-    <?php if ($user): ?>
-        <?php
-        // Check for unread notifications
-        $unread_count = 0;
-        $db = new mysqli('localhost', 'username', 'password', 'deeken_db'); // Update with your DB credentials
-        if ($db->connect_error) {
-            die("Connection failed: " . $db->connect_error);
-        }
-        $stmt = $db->prepare("SELECT COUNT(*) as unread FROM notifications WHERE user_id = ? AND is_read = 0");
-        $stmt->bind_param("i", $user['id']);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $unread_count = $result->fetch_assoc()['unread'];
-        $stmt->close();
-        ?>
-        <div class="profile-trigger">
-            <div class="profile-avatar">
-                <i class="fas fa-user"></i>
-            </div>
-            <div class="profile-info">
-                <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
-                <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
-            </div>
-        </div>
-    <?php else: ?>
-        <div class="profile-trigger">
-            <div class="profile-avatar">
-                <i class="fas fa-user"></i>
-            </div>
-            <div class="profile-info">
-                <span class="profile-greeting">Hi, Guest</span>
-                <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
-            </div>
-        </div>
-    <?php endif; ?>
-    <div class="profile-dropdown-menu" id="profileDropdown">
-        <?php if ($user): ?>
-            <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-            <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
-            <a href="inbox.php">
-                <i class="fas fa-inbox"></i> Inbox
-                <?php if ($unread_count > 0): ?>
-                    <span class="notification-dot"><?php echo $unread_count; ?></span>
+            <div class="profile-dropdown">
+                <?php if ($user): ?>
+                    <?php
+                    // Check for unread notifications using existing $conn
+                    $unread_count = 0;
+                    if ($user) {
+                        $stmt = $conn->prepare("SELECT COUNT(*) as unread FROM notifications WHERE user_id = ? AND is_read = 0");
+                        if ($stmt) {
+                            $stmt->bind_param("i", $user['id']);
+                            $stmt->execute();
+                            $result = $stmt->get_result();
+                            $unread_count = $result->fetch_assoc()['unread'];
+                            $stmt->close();
+                        } else {
+                            error_log("Failed to prepare notification query: " . $conn->error);
+                        }
+                    }
+                    ?>
+                    <div class="profile-trigger" onclick="toggleProfileDropdown()">
+                        <div class="profile-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="profile-info">
+                            <span class="profile-greeting">Hi, <?php echo htmlspecialchars($user['full_name'] ?? $user['email'] ?? 'User'); ?></span>
+                            <span class="profile-account">My Account <i class="fas fa-chevron-down"></i></span>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="profile-trigger" onclick="toggleProfileDropdown()">
+                        <div class="profile-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="profile-info">
+                            <span class="profile-greeting">Hi, Guest</span>
+                            <span class="profile-account">Sign In <i class="fas fa-chevron-down"></i></span>
+                        </div>
+                    </div>
                 <?php endif; ?>
-            </a>
-            <a href="index.php"><i class="fas fa-home"></i> Home</a>
-            <?php if ($user['is_admin']): ?>
-                <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
-            <?php endif; ?>
-            <hr class="dropdown-divider">
-            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-        <?php else: ?>
-            <a href="login.php"><i class="fas fa-sign-in-alt"></i> Sign In</a>
-            <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
-            <hr class="dropdown-divider">
-            <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
-        <?php endif; ?>
-    </div>
-</div>
+                <div class="profile-dropdown-menu" id="profileDropdown">
+                    <?php if ($user): ?>
+                        <a href="profile.php"><i class="fas fa-user"></i> My Profile</a>
+                        <a href="orders.php"><i class="fas fa-box"></i> My Orders</a>
+                        <a href="inbox.php">
+                            <i class="fas fa-inbox"></i> Inbox
+                            <?php if ($unread_count > 0): ?>
+                                <span class="notification-dot"><?php echo $unread_count; ?></span>
+                            <?php endif; ?>
+                        </a>
+                        <a href="index.php"><i class="fas fa-home"></i> Home</a>
+                        <?php if ($user['is_admin']): ?>
+                            <a href="admin.php"><i class="fas fa-tachometer-alt"></i> Admin Panel</a>
+                        <?php endif; ?>
+                        <hr class="dropdown-divider">
+                        <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                    <?php else: ?>
+                        <a href="login.php"><i class="fas fa-sign-in-alt"></i> Sign In</a>
+                        <a href="register.php"><i class="fas fa-user-plus"></i> Create Account</a>
+                        <hr class="dropdown-divider">
+                        <a href="help.php"><i class="fas fa-question-circle"></i> Help Center</a>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
         <div class="search-bar">
             <input type="text" id="searchInput" placeholder="Search products..." value="<?php echo htmlspecialchars($search_query); ?>" onkeypress="if(event.key==='Enter') searchProducts()">
@@ -1302,35 +1304,34 @@ function displayStars($rating) {
                 </div>
             </div>
             
-           <!-- Replace the products-grid loop with this updated version -->
-<div class="products-grid">
-    <?php if (empty($products)): ?>
-        <p>No products found.</p>
-    <?php else: ?>
-        <?php foreach ($products as $product): ?>
-            <a href="product.php?id=<?php echo htmlspecialchars($product['id']); ?>" class="product-card" style="text-decoration: none; color: inherit;">
-                <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="product-image">
-                <?php if ($product['stock_quantity'] == 0): ?>
-                    <span class="stock-badge out-of-stock">Out of Stock</span>
+            <div class="products-grid">
+                <?php if (empty($products)): ?>
+                    <p>No products found.</p>
                 <?php else: ?>
-                    <span class="stock-badge"><?php echo htmlspecialchars($product['stock_quantity']); ?> in Stock</span>
+                    <?php foreach ($products as $product): ?>
+                        <a href="product.php?id=<?php echo htmlspecialchars($product['id']); ?>" class="product-card" style="text-decoration: none; color: inherit;">
+                            <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="product-image">
+                            <?php if ($product['stock_quantity'] == 0): ?>
+                                <span class="stock-badge out-of-stock">Out of Stock</span>
+                            <?php else: ?>
+                                <span class="stock-badge"><?php echo htmlspecialchars($product['stock_quantity']); ?> in Stock</span>
+                            <?php endif; ?>
+                            <div class="product-info">
+                                <h2 class="product-title"><?php echo htmlspecialchars($product['name']); ?></h2>
+                                <span class="product-category"><?php echo htmlspecialchars($product['category_name']); ?></span>
+                                <div class="product-rating">
+                                    <?php echo displayStars($product['avg_rating']); ?>
+                                    <span>(<?php echo htmlspecialchars($product['review_count']); ?>)</span>
+                                </div>
+                                <span class="product-price">$<?php echo number_format($product['price'], 2); ?></span>
+                                <button class="add-to-cart-btn" onclick="addToCart(<?php echo htmlspecialchars($product['id']); ?>, 1); event.preventDefault();" <?php echo $product['stock_quantity'] == 0 ? 'disabled' : ''; ?>>
+                                    Add to Cart
+                                </button>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
                 <?php endif; ?>
-                <div class="product-info">
-                    <h2 class="product-title"><?php echo htmlspecialchars($product['name']); ?></h2>
-                    <span class="product-category"><?php echo htmlspecialchars($product['category_name']); ?></span>
-                    <div class="product-rating">
-                        <?php echo displayStars($product['avg_rating']); ?>
-                        <span>(<?php echo htmlspecialchars($product['review_count']); ?>)</span>
-                    </div>
-                    <span class="product-price">$<?php echo number_format($product['price'], 2); ?></span>
-                    <button class="add-to-cart-btn" onclick="addToCart(<?php echo htmlspecialchars($product['id']); ?>, 1); event.preventDefault();" <?php echo $product['stock_quantity'] == 0 ? 'disabled' : ''; ?>>
-                        Add to Cart
-                    </button>
-                </div>
-            </a>
-        <?php endforeach; ?>
-    <?php endif; ?>
-</div>
+            </div>
             <div class="pagination">
                 <?php if ($page > 1): ?>
                     <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $page - 1])); ?>">« Prev</a>
@@ -1346,7 +1347,6 @@ function displayStars($rating) {
             </div>
         </section>
     </div>
- <!-- Footer -->
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-brand">
